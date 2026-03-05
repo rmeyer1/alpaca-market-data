@@ -1,5 +1,7 @@
 """Custom exceptions for Alpaca Market Data SDK."""
 
+from typing import Optional
+
 
 class AlpacaAPIError(Exception):
     """Base exception for Alpaca API errors."""

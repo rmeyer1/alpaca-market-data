@@ -23,7 +23,7 @@ class TestAlpacaClient:
     def test_client_initialization_with_env_vars(self, monkeypatch):
         """Test client can be initialized from environment variables."""
         monkeypatch.setenv("ALPACA_API_KEY", "env_api_key")
-        monkeypatch.setenv("ALPACA_SECRET_KEY", "env_secret_key")
+        monkeypatch.setenv("ALPACA_API_SECRET", "env_secret_key")
         monkeypatch.setenv("ALPACA_BASE_URL", "https://api.alpaca.markets")
 
         client = AlpacaClient()
