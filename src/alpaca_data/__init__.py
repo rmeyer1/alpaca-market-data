@@ -14,6 +14,7 @@ __author__ = "Alpaca Market Data SDK Contributors"
 __license__ = "MIT"
 
 from alpaca_data.client import AlpacaClient
+from alpaca_data.rate_limiter import RateLimiter, RateLimitStrategy
 from alpaca_data.exceptions import (
     AlpacaAPIError,
     AlpacaAuthError,
@@ -25,6 +26,8 @@ from alpaca_data.models import Bar, Quote, Trade, Snapshot, News
 
 __all__ = [
     "AlpacaClient",
+    "RateLimiter",
+    "RateLimitStrategy",
     "AlpacaAPIError",
     "AlpacaAuthError",
     "AlpacaRateLimitError",

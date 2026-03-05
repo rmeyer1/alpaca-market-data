@@ -2,7 +2,10 @@
 
 import os
 import requests
+import time
 from typing import Optional, Dict, Any
+from .rate_limiter import RateLimiter
+from .exceptions import AlpacaRateLimitError
 
 
 class AlpacaClient:
@@ -13,7 +16,7 @@ class AlpacaClient:
 
     Args:
         api_key: Alpaca API key. If not provided, reads from ALPACA_API_KEY env var.
-        secret_key: Alpaca secret key. If not provided, reads from ALPACA_SECRET_KEY env var.
+        secret_key: Alpaca secret key. If not provided, reads from ALPACA_API_SECRET env var.
         base_url: API base URL. Defaults to paper trading URL.
 
     Raises:
@@ -25,18 +28,29 @@ class AlpacaClient:
         api_key: Optional[str] = None,
         secret_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        rate_per_minute: int = 200,
     ):
-        """Initialize the Alpaca client."""
+        """Initialize the Alpaca client.
+        
+        Args:
+            api_key: Alpaca API key. If not provided, reads from ALPACA_API_KEY env var.
+            secret_key: Alpaca secret key. If not provided, reads from ALPACA_API_SECRET env var.
+            base_url: API base URL. Defaults to paper trading URL.
+            rate_per_minute: Maximum requests per minute (default: 200 for Alpaca free tier).
+        """
         self.api_key = api_key or os.getenv("ALPACA_API_KEY")
-        self.secret_key = secret_key or os.getenv("ALPACA_SECRET_KEY")
+        self.secret_key = secret_key or os.getenv("ALPACA_API_SECRET")
         self.base_url = base_url or os.getenv(
             "ALPACA_BASE_URL", "https://paper-api.alpaca.markets"
         )
+        
+        # Initialize rate limiter
+        self.rate_limiter = RateLimiter(rate_per_minute=rate_per_minute)
 
         if not self.api_key or not self.secret_key:
             raise ValueError(
                 "API credentials required. Provide api_key and secret_key "
-                "or set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables."
+                "or set ALPACA_API_KEY and ALPACA_API_SECRET environment variables."
             )
 
         # Ensure base_url ends without trailing slash for proper URL joining
@@ -74,27 +88,51 @@ class AlpacaClient:
         url = f"{self.base_url}{endpoint}"
         headers = self._get_headers()
 
+        # Apply rate limiting - acquire token before making request
         try:
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=data,
-                timeout=30,
-            )
-            response.raise_for_status()
-            return response
-        except requests.exceptions.HTTPError as e:
-            # Re-raise with more context
-            if e.response.status_code == 401:
-                raise ValueError("Invalid API credentials. Check your API key and secret.")
-            elif e.response.status_code == 429:
-                raise ValueError("Rate limit exceeded. Please wait before making more requests.")
-            else:
-                raise
-        except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"Failed to connect to Alpaca API: {e}")
+            with self.rate_limiter.acquire():
+                try:
+                    response = requests.request(
+                        method=method,
+                        url=url,
+                        headers=headers,
+                        params=params,
+                        json=data,
+                        timeout=30,
+                    )
+                    response.raise_for_status()
+                    return response
+                except requests.exceptions.HTTPError as e:
+                    # Handle 429 (rate limit exceeded) with retry logic
+                    if e.response.status_code == 429:
+                        retry_after = int(e.response.headers.get('Retry-After', 60))
+                        # Wait for the specified retry-after period
+                        time.sleep(retry_after)
+                        
+                        # Retry the request once after waiting
+                        response = requests.request(
+                            method=method,
+                            url=url,
+                            headers=headers,
+                            params=params,
+                            json=data,
+                            timeout=30,
+                        )
+                        response.raise_for_status()
+                        return response
+                    
+                    # Handle other HTTP errors
+                    elif e.response.status_code == 401:
+                        raise ValueError("Invalid API credentials. Check your API key and secret.")
+                    else:
+                        raise
+                        
+                except requests.exceptions.RequestException as e:
+                    raise ConnectionError(f"Failed to connect to Alpaca API: {e}")
+                    
+        except RuntimeError as e:
+            # Rate limiter threw an exception (THROTTLE strategy)
+            raise AlpacaRateLimitError(str(e), retry_after=None)
 
     def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
         """Make a GET request to the API.
