@@ -1,14 +1,15 @@
 """Alpaca API Client implementation."""
 
 import os
-from typing import Optional
+import requests
+from typing import Optional, Dict, Any
 
 
 class AlpacaClient:
     """HTTP client for Alpaca Market Data API.
 
     This class handles authentication, rate limiting, and HTTP requests
-to the Alpaca Market Data API.
+    to the Alpaca Market Data API.
 
     Args:
         api_key: Alpaca API key. If not provided, reads from ALPACA_API_KEY env var.
@@ -16,7 +17,7 @@ to the Alpaca Market Data API.
         base_url: API base URL. Defaults to paper trading URL.
 
     Raises:
-        AlpacaAuthError: If API credentials are not provided or invalid.
+        ValueError: If API credentials are not provided or invalid.
     """
 
     def __init__(
@@ -37,3 +38,97 @@ to the Alpaca Market Data API.
                 "API credentials required. Provide api_key and secret_key "
                 "or set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables."
             )
+
+        # Ensure base_url ends without trailing slash for proper URL joining
+        self.base_url = self.base_url.rstrip('/')
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Generate authentication headers for API requests."""
+        return {
+            "APCA-API-KEY-ID": self.api_key,
+            "APCA-API-SECRET-KEY": self.secret_key,
+        }
+
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> requests.Response:
+        """Make authenticated HTTP request to the Alpaca API.
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: API endpoint path (e.g., '/v2/bars')
+            params: URL query parameters
+            data: Request body data for POST/PUT requests
+
+        Returns:
+            requests.Response: The HTTP response object
+
+        Raises:
+            requests.HTTPError: For HTTP error status codes
+            requests.ConnectionError: For network-related errors
+        """
+        url = f"{self.base_url}{endpoint}"
+        headers = self._get_headers()
+
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                params=params,
+                json=data,
+                timeout=30,
+            )
+            response.raise_for_status()
+            return response
+        except requests.exceptions.HTTPError as e:
+            # Re-raise with more context
+            if e.response.status_code == 401:
+                raise ValueError("Invalid API credentials. Check your API key and secret.")
+            elif e.response.status_code == 429:
+                raise ValueError("Rate limit exceeded. Please wait before making more requests.")
+            else:
+                raise
+        except requests.exceptions.RequestException as e:
+            raise ConnectionError(f"Failed to connect to Alpaca API: {e}")
+
+    def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """Make a GET request to the API.
+
+        Args:
+            endpoint: API endpoint path
+            params: URL query parameters
+
+        Returns:
+            requests.Response: The HTTP response object
+        """
+        return self._make_request("GET", endpoint, params=params)
+
+    def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """Make a POST request to the API.
+
+        Args:
+            endpoint: API endpoint path
+            data: Request body data
+
+        Returns:
+            requests.Response: The HTTP response object
+        """
+        return self._make_request("POST", endpoint, data=data)
+
+    def test_connection(self) -> bool:
+        """Test the connection to Alpaca API with current credentials.
+
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
+        try:
+            # Try to get account info to test credentials
+            response = self.get("/v2/account")
+            return response.status_code == 200
+        except Exception:
+            return False
