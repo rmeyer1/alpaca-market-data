@@ -12,12 +12,50 @@ A Python SDK for accessing Alpaca's Market Data API.
 
 ## Installation
 
+### Using Virtual Environment (Recommended)
+
+It's recommended to use a virtual environment to avoid conflicts with system packages.
+
+**Create virtual environment:**
+```bash
+# Using venv (Python 3.3+)
+python -m venv alpaca-env
+
+# Activate virtual environment
+# On macOS/Linux:
+source alpaca-env/bin/activate
+
+# On Windows:
+alpaca-env\Scripts\activate
+```
+
+**Install package:**
+```bash
+# Install in development mode
+pip install -e .
+
+# Install with development dependencies
+pip install -e ".[dev]"
+```
+
+**Verify installation:**
+```bash
+pip list | grep alpaca-market-data
+```
+
+**Deactivate when done:**
+```bash
+deactivate
+```
+
+### Alternative Installation Methods
+
+**Global installation (not recommended):**
 ```bash
 pip install -e .
 ```
 
-For development:
-
+For development (global install):
 ```bash
 pip install -e ".[dev]"
 ```
