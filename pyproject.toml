@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alpaca-market-data"
+version = "0.1.0"
+description = "Python SDK for Alpaca Market Data API"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Alpaca Market Data SDK Contributors"},
+]
+keywords = ["alpaca", "market-data", "stocks", "crypto", "trading", "api"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "alpaca-py>=0.8.0",
+    "requests>=2.28.0",
+    "python-dotenv>=1.0.0",
+    "pandas>=1.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.0.0",
+    "responses>=0.23.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/alpaca/alpaca-market-data-sdk"
+Documentation = "https://docs.alpaca.markets/"
+Repository = "https://github.com/alpaca/alpaca-market-data-sdk.git"
+Issues = "https://github.com/alpaca/alpaca-market-data-sdk/issues"
+
+[project.scripts]
+alpaca-bars = "scripts.get_bars:main"
+alpaca-quotes = "scripts.get_quotes:main"
+alpaca-news = "scripts.get_news:main"
+alpaca-snapshot = "scripts.get_snapshot:main"
+alpaca-crypto = "scripts.crypto_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alpaca_data"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = ["E501"]  # Line too long (handled by black)
+
+[tool.ruff.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["alpaca.*", "responses.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=src/alpaca_data",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--strict-markers",
+]
+markers = [
+    "integration: marks tests as integration tests (requires API credentials)",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["src/alpaca_data"]
+omit = ["*/tests/*", "*/scripts/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
