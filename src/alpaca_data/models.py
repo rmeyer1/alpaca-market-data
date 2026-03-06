@@ -43,7 +43,7 @@ class Bar:
             close=data["c"],
             volume=data["v"],
             trade_count=data.get("n"),
-            vwap=data.get("vw"),
+            vwap=data.get("vwap"),
         )
 
 
