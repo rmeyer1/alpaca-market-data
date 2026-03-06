@@ -116,6 +116,20 @@ class Trade:
     id: Optional[str] = None
     tape: Optional[str] = None
 
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "Trade":
+        """Create Trade from API response dictionary."""
+        return cls(
+            symbol=symbol,
+            timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+            exchange=data["x"],
+            price=data["p"],
+            size=data["s"],
+            conditions=data.get("c"),
+            id=data.get("i"),
+            tape=data.get("z"),
+        )
+
 
 @dataclass
 class Snapshot:
