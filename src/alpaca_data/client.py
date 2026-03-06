@@ -401,3 +401,185 @@ class AlpacaClient:
             result["has_next_page"] = False
             
         return result
+
+    def get_snapshot(
+        self,
+        symbols: str | List[str],
+        feed: str = "iex",
+    ) -> Dict[str, Any]:
+        """Get latest market data snapshot for one or more symbols.
+        
+        Args:
+            symbols: Single symbol (str) or multiple symbols (list) to retrieve snapshots for
+            feed: Data feed ('iex' for free tier, 'sip' for premium)
+            
+        Returns:
+            Dictionary containing:
+                - snapshots: List of Snapshot objects
+                - symbol: The symbol(s) requested
+                - feed: The data feed used
+                - count: Number of snapshots returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_snapshot("AAPL")
+            >>> print(f"Got snapshot for {result['symbol']}: {result['snapshots'][0]}")
+            
+            >>> # Multiple symbols
+            >>> result = client.get_snapshot(["AAPL", "GOOGL"])
+            >>> for snapshot in result['snapshots']:
+            ...     print(f"{snapshot.symbol}: Latest trade {snapshot.latest_trade.price}")
+        """
+        from .models import Snapshot
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v2/stocks/{symbols}/snapshot"
+            params = {
+                "feed": feed,
+            }
+        else:
+            endpoint = "/v2/stocks/snapshots"
+            params = {
+                "symbols": ",".join(symbols),
+                "feed": feed,
+            }
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse snapshots from response
+        snapshots = []
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            snapshot_data = data.get("snapshot", {})
+            if snapshot_data:
+                snapshots.append(Snapshot.from_dict(symbols, snapshot_data))
+        else:
+            # Multi-symbol response
+            snapshots_data = data.get("snapshots", [])
+            for snapshot_data in snapshots_data:
+                symbol = snapshot_data.get("S", snapshot_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Snapshot.from_dict
+                snapshot_data_copy = snapshot_data.copy()
+                snapshot_data_copy.pop("S", None)
+                snapshot_data_copy.pop("symbol", None)
+                snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "snapshots": snapshots,
+            "symbol": symbols,
+            "feed": feed,
+            "count": len(snapshots),
+        }
+            
+        return result
+
+    def get_trades(
+        self,
+        symbols: str | List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        feed: str = "iex",
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get historical trades for one or more symbols.
+        
+        Args:
+            symbols: Single symbol (str) or multiple symbols (list) to retrieve trades for
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of trades to return (max 1000, default 1000)
+            feed: Data feed ('iex' for free tier, 'sip' for premium)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - trades: List of Trade objects
+                - symbol: The symbol(s) requested
+                - feed: The data feed used
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of trades returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_trades("AAPL", limit=100)
+            >>> print(f"Got {len(result['trades'])} trades for {result['symbol']}")
+            
+            >>> # With date range
+            >>> result = client.get_trades("AAPL", start="2024-01-01T09:30:00-05:00", end="2024-01-01T16:00:00-05:00")
+            >>> for trade in result['trades']:
+            ...     print(f"Trade: {trade.timestamp} {trade.price} @ {trade.size}")
+        """
+        from .models import Trade
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v2/stocks/{symbols}/trades"
+            params = {
+                "limit": limit,
+                "feed": feed,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v2/stocks/trades"
+            params = {
+                "symbols": ",".join(symbols),
+                "limit": limit,
+                "feed": feed,
+                "sort": sort,
+            }
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse trades from response
+        trades = []
+        trades_data = data.get("trades", [])
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            for trade_data in trades_data:
+                trades.append(Trade.from_dict(symbols, trade_data))
+        else:
+            # Multi-symbol response - each trade includes symbol field
+            for trade_data in trades_data:
+                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Trade.from_dict
+                trade_data_copy = trade_data.copy()
+                trade_data_copy.pop("S", None)
+                trade_data_copy.pop("symbol", None)
+                trades.append(Trade.from_dict(symbol, trade_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "trades": trades,
+            "symbol": symbols,
+            "feed": feed,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(trades),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return result

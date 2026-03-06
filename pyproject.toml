@@ -55,6 +55,7 @@ alpaca-bars = "scripts.get_bars:main"
 alpaca-quotes = "scripts.get_quotes:main"
 alpaca-news = "scripts.get_news:main"
 alpaca-snapshot = "scripts.get_snapshot:main"
+alpaca-trades = "scripts.get_trades:main"
 alpaca-crypto = "scripts.crypto_cli:main"
 
 [tool.hatch.build.targets.wheel]
