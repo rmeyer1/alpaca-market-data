@@ -455,8 +455,7 @@ class AlpacaClient:
         if isinstance(symbols, str):
             # Single symbol response
             snapshot_data = data.get("snapshot", {})
-            if snapshot_data:
-                snapshots.append(Snapshot.from_dict(symbols, snapshot_data))
+            snapshots.append(Snapshot.from_dict(symbols, snapshot_data))
         else:
             # Multi-symbol response
             snapshots_data = data.get("snapshots", [])

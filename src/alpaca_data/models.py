@@ -151,6 +151,24 @@ class Snapshot:
     daily_bar: Optional[Bar] = None
     prev_daily_bar: Optional[Bar] = None
 
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "Snapshot":
+        """Create Snapshot from API response dictionary."""
+        latest_trade_data = data.get("latest_trade")
+        latest_quote_data = data.get("latest_quote")
+        minute_bar_data = data.get("minute_bar")
+        daily_bar_data = data.get("daily_bar")
+        prev_daily_bar_data = data.get("prev_daily_bar")
+
+        return cls(
+            symbol=symbol,
+            latest_trade=Trade.from_dict(symbol, latest_trade_data) if latest_trade_data else None,
+            latest_quote=Quote.from_dict(symbol, latest_quote_data) if latest_quote_data else None,
+            minute_bar=Bar.from_dict(symbol, minute_bar_data) if minute_bar_data else None,
+            daily_bar=Bar.from_dict(symbol, daily_bar_data) if daily_bar_data else None,
+            prev_daily_bar=Bar.from_dict(symbol, prev_daily_bar_data) if prev_daily_bar_data else None,
+        )
+
 
 @dataclass
 class News:

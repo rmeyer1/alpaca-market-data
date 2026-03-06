@@ -71,9 +71,83 @@ def main():
             
         print("✅ Connected successfully!")
         
-        # TODO: Implement actual get_snapshot call when TASK-9 is ready
+        # Fetch snapshots
         print(f"Fetching snapshots for: {', '.join(args.symbols)}")
-        print("Note: Full implementation coming in TASK-9.")
+        result = client.get_snapshot(args.symbols, feed=args.feed)
+        
+        # Format output
+        if args.output == "json":
+            import json
+            output_data = {
+                "symbol": result["symbol"],
+                "feed": result["feed"],
+                "count": result["count"],
+                "snapshots": []
+            }
+            
+            for snapshot in result["snapshots"]:
+                snapshot_dict = {"symbol": snapshot.symbol}
+                
+                if snapshot.latest_trade:
+                    snapshot_dict["latest_trade"] = {
+                        "timestamp": snapshot.latest_trade.timestamp.isoformat(),
+                        "price": snapshot.latest_trade.price,
+                        "size": snapshot.latest_trade.size,
+                        "exchange": snapshot.latest_trade.exchange
+                    }
+                
+                if snapshot.latest_quote:
+                    snapshot_dict["latest_quote"] = {
+                        "timestamp": snapshot.latest_quote.timestamp.isoformat(),
+                        "ask_price": snapshot.latest_quote.ask_price,
+                        "bid_price": snapshot.latest_quote.bid_price,
+                        "ask_size": snapshot.latest_quote.ask_size,
+                        "bid_size": snapshot.latest_quote.bid_size
+                    }
+                
+                if snapshot.minute_bar:
+                    snapshot_dict["minute_bar"] = {
+                        "timestamp": snapshot.minute_bar.timestamp.isoformat(),
+                        "open": snapshot.minute_bar.open,
+                        "high": snapshot.minute_bar.high,
+                        "low": snapshot.minute_bar.low,
+                        "close": snapshot.minute_bar.close,
+                        "volume": snapshot.minute_bar.volume
+                    }
+                
+                if snapshot.daily_bar:
+                    snapshot_dict["daily_bar"] = {
+                        "timestamp": snapshot.daily_bar.timestamp.isoformat(),
+                        "open": snapshot.daily_bar.open,
+                        "high": snapshot.daily_bar.high,
+                        "low": snapshot.daily_bar.low,
+                        "close": snapshot.daily_bar.close,
+                        "volume": snapshot.daily_bar.volume
+                    }
+                
+                output_data["snapshots"].append(snapshot_dict)
+            
+            if args.output_file:
+                with open(args.output_file, 'w') as f:
+                    json.dump(output_data, f, indent=2)
+                print(f"✅ Results saved to {args.output_file}")
+            else:
+                print(json.dumps(output_data, indent=2))
+        
+        else:
+            # CSV format
+            print("Symbol,Latest Trade Price,Latest Trade Size,Ask Price,Bid Price,Minute Bar Close,Daily Bar Close")
+            for snapshot in result["snapshots"]:
+                trade_price = snapshot.latest_trade.price if snapshot.latest_trade else "N/A"
+                trade_size = snapshot.latest_trade.size if snapshot.latest_trade else "N/A"
+                ask_price = snapshot.latest_quote.ask_price if snapshot.latest_quote else "N/A"
+                bid_price = snapshot.latest_quote.bid_price if snapshot.latest_quote else "N/A"
+                minute_close = snapshot.minute_bar.close if snapshot.minute_bar else "N/A"
+                daily_close = snapshot.daily_bar.close if snapshot.daily_bar else "N/A"
+                
+                print(f"{snapshot.symbol},{trade_price},{trade_size},{ask_price},{bid_price},{minute_close},{daily_close}")
+        
+        print(f"\n✅ Retrieved {result['count']} snapshot(s) using {args.feed} feed")
         
     except AlpacaAuthError as e:
         print(f"Authentication Error: {e}", file=sys.stderr)
