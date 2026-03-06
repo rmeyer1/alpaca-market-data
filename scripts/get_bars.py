@@ -99,9 +99,80 @@ def main():
             
         print("✅ Connected successfully!")
         
-        # TODO: Implement actual get_bars call when TASK-6 is ready
-        print(f"Fetching {args.timeframe} bars for: {', '.join(args.symbols)}")
-        print("Note: Full implementation coming in TASK-6.")
+        # Prepare parameters
+        params = {
+            'symbols': args.symbols,
+            'timeframe': args.timeframe,
+            'limit': args.limit,
+        }
+        
+        # Add optional parameters
+        if args.start:
+            params['start'] = args.start
+        if args.end:
+            params['end'] = args.end
+            
+        print(f"📊 Fetching {args.timeframe} bars for: {', '.join(args.symbols)}")
+        
+        # Make the API call
+        result = client.get_bars(**params)
+        
+        # Display results
+        print(f"✅ Retrieved {result['count']} bars")
+        
+        # Convert bars to output format
+        if args.output == "json":
+            if args.output_file:
+                import json
+                with open(args.output_file, 'w') as f:
+                    json.dump(result, f, default=str, indent=2)
+                print(f"💾 Saved to {args.output_file}")
+            else:
+                import json
+                print(json.dumps(result, default=str, indent=2))
+        
+        elif args.output == "csv":
+            if not result['bars']:
+                print("No bars to export")
+                return
+                
+            import csv
+            import io
+            
+            # Create CSV content
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            first_bar = result['bars'][0]
+            writer.writerow(['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap'])
+            
+            # Write bar data
+            for bar in result['bars']:
+                writer.writerow([
+                    bar.symbol,
+                    bar.timestamp,
+                    bar.open,
+                    bar.high,
+                    bar.low,
+                    bar.close,
+                    bar.volume,
+                    bar.trade_count or '',
+                    bar.vwap or ''
+                ])
+            
+            # Output CSV
+            if args.output_file:
+                with open(args.output_file, 'w') as f:
+                    f.write(output.getvalue())
+                print(f"💾 Saved to {args.output_file}")
+            else:
+                print("📄 CSV Output:")
+                print(output.getvalue())
+        
+        # Show pagination info if available
+        if result.get('has_next_page'):
+            print(f"📖 More pages available. Next page token: {result['next_page_token']}")
         
     except AlpacaAuthError as e:
         print(f"Authentication Error: {e}", file=sys.stderr)

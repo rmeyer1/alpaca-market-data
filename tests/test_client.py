@@ -42,7 +42,7 @@ class TestAlpacaClient:
     def test_default_base_url_is_paper(self, monkeypatch):
         """Test that default base URL is paper trading."""
         monkeypatch.setenv("ALPACA_API_KEY", "test_key")
-        monkeypatch.setenv("ALPACA_SECRET_KEY", "test_secret")
+        monkeypatch.setenv("ALPACA_API_SECRET", "test_secret")
         monkeypatch.delenv("ALPACA_BASE_URL", raising=False)
 
         client = AlpacaClient()
