@@ -5,6 +5,20 @@ import argparse
 import os
 import sys
 
+# Import SDK modules
+try:
+    from alpaca_data import AlpacaClient
+    from alpaca_data.exceptions import (
+        AlpacaAuthError,
+        AlpacaNotFoundError,
+        AlpacaRateLimitError,
+        AlpacaAPIError,
+    )
+except ImportError as e:
+    print(f"Error importing Alpaca SDK: {e}", file=sys.stderr)
+    print("Make sure the package is installed: pip install -e .", file=sys.stderr)
+    sys.exit(1)
+
 
 def main():
     """Main entry point for get_quotes CLI."""
@@ -56,8 +70,42 @@ def main():
         print("Error: API credentials required", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Fetching quotes for: {', '.join(args.symbols)}")
-    print("Note: Placeholder implementation. Full implementation coming in TASK-7.")
+    try:
+        # Initialize client
+        client = AlpacaClient()
+        
+        print(f"Testing connection to Alpaca API...")
+        if not client.test_connection():
+            print("Error: Failed to connect to Alpaca API. Check your credentials.", file=sys.stderr)
+            sys.exit(1)
+            
+        print("✅ Connected successfully!")
+        
+        # TODO: Implement actual get_quotes call when TASK-7 is ready
+        print(f"Fetching quotes for: {', '.join(args.symbols)}")
+        print("Note: Full implementation coming in TASK-7.")
+        
+    except AlpacaAuthError as e:
+        print(f"Authentication Error: {e}", file=sys.stderr)
+        print("Check your API credentials in .env file", file=sys.stderr)
+        sys.exit(1)
+    except AlpacaRateLimitError as e:
+        print(f"Rate Limit Error: {e}", file=sys.stderr)
+        if e.retry_after:
+            print(f"Retry after: {e.retry_after} seconds", file=sys.stderr)
+        sys.exit(1)
+    except AlpacaNotFoundError as e:
+        print(f"Not Found Error: {e}", file=sys.stderr)
+        print("Check that your symbols are valid", file=sys.stderr)
+        sys.exit(1)
+    except AlpacaAPIError as e:
+        print(f"API Error: {e}", file=sys.stderr)
+        if e.status_code:
+            print(f"HTTP Status: {e.status_code}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
