@@ -197,3 +197,19 @@ class News:
     updated_at: Optional[datetime] = None
     url: Optional[str] = None
     content: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "News":
+        """Create News from API response dictionary."""
+        return cls(
+            id=data["id"],
+            headline=data["headline"],
+            created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")),
+            symbols=data["symbols"],
+            source=data["source"],
+            summary=data.get("summary"),
+            author=data.get("author"),
+            updated_at=datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")) if data.get("updated_at") else None,
+            url=data.get("url"),
+            content=data.get("content"),
+        )
