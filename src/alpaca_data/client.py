@@ -678,3 +678,118 @@ class AlpacaClient:
             result["end"] = end
             
         return result
+
+    def get_crypto_bars(
+        self,
+        symbol_or_symbols: str | List[str],
+        timeframe: str = "1Day",
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        exchange: Optional[str] = None,
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get historical OHLCV bars for crypto pairs (BTC/USD, ETH/USD, etc.).
+        
+        Args:
+            symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
+            timeframe: Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of bars to return (max 1000, default 1000)
+            exchange: Exchange to filter by (e.g., "NYSE", "CBSE") (optional)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - bars: List of Bar objects
+                - symbol: The crypto symbol(s) requested
+                - timeframe: The timeframe used
+                - exchange: Exchange filter applied (if any)
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of bars returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_crypto_bars("BTC/USD", timeframe="1Hour", limit=50)
+            >>> print(f"Got {len(result['bars'])} bars for {result['symbol']}")
+            
+            >>> # Multiple crypto pairs
+            >>> result = client.get_crypto_bars(["BTC/USD", "ETH/USD"], timeframe="1Day")
+            >>> for bar in result['bars']:
+            ...     print(f"{bar.symbol}: {bar.timestamp} ${bar.close}")
+        """
+        from .models import Bar
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbol_or_symbols, str):
+            endpoint = f"/v1beta1/crypto/bars/{symbol_or_symbols}"
+            params = {
+                "timeframe": timeframe,
+                "limit": limit,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v1beta1/crypto/bars"
+            params = {
+                "symbols": ",".join(symbol_or_symbols),
+                "timeframe": timeframe,
+                "limit": limit,
+                "sort": sort,
+            }
+        
+        # Add optional parameters
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if exchange:
+            params["exchange"] = exchange
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse bars from response
+        bars = []
+        bars_data = data.get("bars", [])
+        
+        if isinstance(symbol_or_symbols, str):
+            # Single symbol response
+            for bar_data in bars_data:
+                bars.append(Bar.from_dict(symbol_or_symbols, bar_data))
+        else:
+            # Multi-symbol response - each bar includes symbol field
+            for bar_data in bars_data:
+                symbol = bar_data.get("S", bar_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Bar.from_dict
+                bar_data_copy = bar_data.copy()
+                bar_data_copy.pop("S", None)
+                bar_data_copy.pop("symbol", None)
+                bars.append(Bar.from_dict(symbol, bar_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "bars": bars,
+            "symbol": symbol_or_symbols,
+            "timeframe": timeframe,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(bars),
+        }
+        
+        # Add optional metadata
+        if exchange:
+            result["exchange"] = exchange
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return result
