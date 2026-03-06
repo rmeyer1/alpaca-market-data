@@ -86,11 +86,84 @@ def main():
             
         print("✅ Connected successfully!")
         
-        # TODO: Implement actual get_news call when TASK-10 is ready
+        # Fetch news articles
         print(f"Fetching news...")
         if args.symbols:
             print(f"Symbols: {', '.join(args.symbols)}")
-        print("Note: Full implementation coming in TASK-10.")
+        
+        result = client.get_news(
+            symbols=args.symbols,
+            start=args.start,
+            end=args.end,
+            limit=args.limit,
+            include_content=args.include_content
+        )
+        
+        # Format output
+        if args.output == "json":
+            import json
+            output_data = {
+                "count": result["count"],
+                "next_page_token": result.get("next_page_token"),
+                "has_next_page": result.get("has_next_page", False)
+            }
+            
+            # Add filter info if present
+            if "symbols" in result:
+                output_data["symbols"] = result["symbols"]
+            if "start" in result:
+                output_data["start"] = result["start"]
+            if "end" in result:
+                output_data["end"] = result["end"]
+            
+            output_data["news"] = []
+            
+            for article in result["news"]:
+                article_dict = {
+                    "id": article.id,
+                    "headline": article.headline,
+                    "created_at": article.created_at.isoformat(),
+                    "symbols": article.symbols,
+                    "source": article.source
+                }
+                
+                if article.summary:
+                    article_dict["summary"] = article.summary
+                if article.author:
+                    article_dict["author"] = article.author
+                if article.updated_at:
+                    article_dict["updated_at"] = article.updated_at.isoformat()
+                if article.url:
+                    article_dict["url"] = article.url
+                if article.content:
+                    article_dict["content"] = article.content
+                
+                output_data["news"].append(article_dict)
+            
+            if args.output_file:
+                with open(args.output_file, 'w') as f:
+                    json.dump(output_data, f, indent=2)
+                print(f"✅ Results saved to {args.output_file}")
+            else:
+                print(json.dumps(output_data, indent=2))
+        
+        else:
+            # CSV format
+            print("ID,Headline,Author,Created At,Source,URL,Symbols")
+            for article in result["news"]:
+                headline = article.headline.replace('"', '""')  # Escape quotes
+                author = article.author or ""
+                url = article.url or ""
+                symbols = ",".join(article.symbols)
+                
+                print(f"{article.id},\"{headline}\",\"{author}\",{article.created_at.isoformat()},\"{article.source}\",{url},\"{symbols}\"")
+        
+        print(f"\n✅ Retrieved {result['count']} article(s)")
+        if result.get('has_next_page'):
+            print(f"More articles available (next_page_token: {result.get('next_page_token')})")
+        
+        if args.include_content:
+            print("ℹ️  Full article content included (may increase response time)")
         
     except AlpacaAuthError as e:
         print(f"Authentication Error: {e}", file=sys.stderr)

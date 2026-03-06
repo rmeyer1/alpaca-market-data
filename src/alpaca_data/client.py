@@ -582,3 +582,99 @@ class AlpacaClient:
             result["has_next_page"] = False
             
         return result
+
+    def get_news(
+        self,
+        symbols: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 50,
+        include_content: bool = False,
+        sort: str = "desc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get news articles for specified symbols and date range.
+        
+        Args:
+            symbols: List of symbols to filter news by (optional)
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of articles to return (default 50)
+            include_content: Whether to include full article content (default False)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored)
+            
+        Returns:
+            Dictionary containing:
+                - news: List of News objects
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of articles returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_news(symbols=["AAPL", "GOOGL"], limit=10)
+            >>> print(f"Got {len(result['news'])} news articles")
+            
+            >>> # With date range
+            >>> result = client.get_news(start="2024-01-01", end="2024-01-02", include_content=True)
+            >>> for article in result['news']:
+            ...     print(f"Headline: {article.headline}")
+            ...     print(f"Source: {article.source}")
+            ...     print(f"Related: {article.symbols}")
+        """
+        from .models import News
+        
+        # Build API endpoint and parameters
+        endpoint = "/v1beta1/news"
+        params = {
+            "limit": limit,
+            "include_content": include_content,
+            "sort": sort,
+        }
+        
+        # Add symbol filters
+        if symbols:
+            params["symbols"] = ",".join(symbols)
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse news articles from response
+        news_articles = []
+        news_data = data.get("news", [])
+        
+        for article_data in news_data:
+            news_articles.append(News.from_dict(article_data))
+        
+        # Build response with metadata
+        result = {
+            "news": news_articles,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(news_articles),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        # Add filter info
+        if symbols:
+            result["symbols"] = symbols
+        if start:
+            result["start"] = start
+        if end:
+            result["end"] = end
+            
+        return result
