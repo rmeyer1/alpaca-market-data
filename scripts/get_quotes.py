@@ -81,9 +81,81 @@ def main():
             
         print("✅ Connected successfully!")
         
-        # TODO: Implement actual get_quotes call when TASK-7 is ready
-        print(f"Fetching quotes for: {', '.join(args.symbols)}")
-        print("Note: Full implementation coming in TASK-7.")
+        # Prepare parameters
+        params = {
+            'symbols': args.symbols,
+            'limit': args.limit,
+            'feed': args.feed,
+        }
+        
+        # Add optional parameters
+        if args.start:
+            params['start'] = args.start
+        if args.end:
+            params['end'] = args.end
+            
+        print(f"📊 Fetching quotes for: {', '.join(args.symbols)}")
+        
+        # Make the API call
+        result = client.get_quotes(**params)
+        
+        # Display results
+        print(f"✅ Retrieved {result['count']} quotes")
+        
+        # Convert quotes to output format
+        if args.output == "json":
+            if args.output_file:
+                import json
+                with open(args.output_file, 'w') as f:
+                    json.dump(result, f, default=str, indent=2)
+                print(f"💾 Saved to {args.output_file}")
+            else:
+                import json
+                print(json.dumps(result, default=str, indent=2))
+        
+        elif args.output == "csv":
+            if not result['quotes']:
+                print("No quotes to export")
+                return
+                
+            import csv
+            import io
+            
+            # Create CSV content
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            first_quote = result['quotes'][0]
+            writer.writerow(['symbol', 'timestamp', 'ask_exchange', 'ask_price', 'ask_size', 'bid_exchange', 'bid_price', 'bid_size', 'conditions', 'tape'])
+            
+            # Write quote data
+            for quote in result['quotes']:
+                writer.writerow([
+                    quote.symbol,
+                    quote.timestamp,
+                    quote.ask_exchange,
+                    quote.ask_price,
+                    quote.ask_size,
+                    quote.bid_exchange,
+                    quote.bid_price,
+                    quote.bid_size,
+                    '|'.join(quote.conditions) if quote.conditions else '',
+                    quote.tape or ''
+                ])
+            
+            # Output CSV
+            if args.output_file:
+                with open(args.output_file, 'w') as f:
+                    f.write(output.getvalue())
+                print(f"💾 Saved to {args.output_file}")
+            else:
+                print("📄 CSV Output:")
+                print(output.getvalue())
+        
+        # Show pagination info if available
+        if result.get('has_next_page'):
+            print(f"📖 More pages available. Next page token: {result['next_page_token']}")
         
     except AlpacaAuthError as e:
         print(f"Authentication Error: {e}", file=sys.stderr)

@@ -297,3 +297,107 @@ class AlpacaClient:
             result["has_next_page"] = False
             
         return result
+
+    def get_quotes(
+        self,
+        symbols: str | List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        feed: str = "iex",
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get latest and historical NBBO quotes for one or more symbols.
+        
+        Args:
+            symbols: Single symbol (str) or multiple symbols (list) to retrieve quotes for
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of quotes to return (max 1000, default 1000)
+            feed: Data feed ('iex' for free tier, 'sip' for premium)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - quotes: List of Quote objects
+                - symbol: The symbol(s) requested
+                - feed: The data feed used
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of quotes returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_quotes("AAPL", limit=100)
+            >>> print(f"Got {len(result['quotes'])} quotes for {result['symbol']}")
+            
+            >>> # With date range
+            >>> result = client.get_quotes("AAPL", start="2024-01-01T09:30:00-05:00", end="2024-01-01T16:00:00-05:00")
+        """
+        from .models import Quote
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v2/stocks/{symbols}/quotes"
+            params = {
+                "limit": limit,
+                "feed": feed,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v2/stocks/quotes"
+            params = {
+                "symbols": ",".join(symbols),
+                "limit": limit,
+                "feed": feed,
+                "sort": sort,
+            }
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse quotes from response
+        quotes = []
+        quotes_data = data.get("quotes", [])
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            for quote_data in quotes_data:
+                quotes.append(Quote.from_dict(symbols, quote_data))
+        else:
+            # Multi-symbol response - each quote includes symbol field
+            for quote_data in quotes_data:
+                symbol = quote_data.get("S", quote_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Quote.from_dict
+                quote_data_copy = quote_data.copy()
+                quote_data_copy.pop("S", None)
+                quote_data_copy.pop("symbol", None)
+                quotes.append(Quote.from_dict(symbol, quote_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "quotes": quotes,
+            "symbol": symbols,
+            "feed": feed,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(quotes),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return result

@@ -75,6 +75,22 @@ class Quote:
     conditions: Optional[List[str]] = None
     tape: Optional[str] = None
 
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "Quote":
+        """Create Quote from API response dictionary."""
+        return cls(
+            symbol=symbol,
+            timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+            ask_exchange=data["ax"],
+            ask_price=data["ap"],
+            ask_size=data["as"],
+            bid_exchange=data["bx"],
+            bid_price=data["bp"],
+            bid_size=data["bs"],
+            conditions=data.get("c"),
+            tape=data.get("z"),
+        )
+
 
 @dataclass
 class Trade:
