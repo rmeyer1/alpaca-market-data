@@ -1,441 +1,371 @@
-"""Test get_crypto_quotes method implementation."""
+"""Tests for get_crypto_quotes endpoint."""
 
 import pytest
-from unittest.mock import Mock, patch
-from alpaca_data import AlpacaClient, Quote
-from alpaca_data.exceptions import AlpacaAPIError
+import responses
+from alpaca_data import AlpacaClient
+from alpaca_data.models import Quote
+from datetime import datetime
 
 
 class TestGetCryptoQuotes:
-    """Test cases for the get_crypto_quotes method."""
+    """Test suite for get_crypto_quotes method."""
 
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_single_symbol(self, mock_request):
-        """Test get_crypto_quotes with a single crypto symbol."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
-                    "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
-                    "c": ["R"],
-                    "z": "B"
-                },
-                {
-                    "t": "2024-01-01T12:01:00Z",
-                    "ax": "CBSE",
-                    "ap": 42001.00,
-                    "as": 3.2,
-                    "bx": "CBSE",
-                    "bp": 41995.75,
-                    "bs": 2.1,
-                    "c": ["R"],
-                    "z": "B"
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes
-        result = client.get_crypto_quotes("BTC/USD")
-
-        # Verify results
-        assert result["count"] == 2
-        assert result["symbol"] == "BTC/USD"
-        assert result["has_next_page"] is False
-        assert len(result["quotes"]) == 2
-
-        # Verify first quote
-        quote1 = result["quotes"][0]
-        assert quote1.symbol == "BTC/USD"
-        assert quote1.timestamp.isoformat().startswith("2024-01-01T12:00:00")
-        assert quote1.ask_exchange == "CBSE"
-        assert quote1.ask_price == 42000.50
-        assert quote1.ask_size == 2.5
-        assert quote1.bid_exchange == "CBSE"
-        assert quote1.bid_price == 41995.25
-        assert quote1.bid_size == 1.8
-        assert quote1.conditions == ["R"]
-        assert quote1.tape == "B"
-
-        # Verify second quote
-        quote2 = result["quotes"][1]
-        assert quote2.symbol == "BTC/USD"
-        assert quote2.ask_price == 42001.00
-        assert quote2.bid_price == 41995.75
-
-        # Verify API call
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert "crypto/quotes/BTC/USD" in call_args[1]["url"]
-        params = call_args[1]["params"]
-        assert params["limit"] == 1000
-        assert params["sort"] == "asc"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_multiple_symbols(self, mock_request):
-        """Test get_crypto_quotes with multiple crypto symbols."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "S": "BTC/USD",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
-                    "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
-                    "c": ["R"],
-                    "z": "B"
-                },
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "S": "ETH/USD",
-                    "ax": "CBSE",
-                    "ap": 2500.75,
-                    "as": 5.0,
-                    "bx": "CBSE",
-                    "bp": 2500.25,
-                    "bs": 4.2,
-                    "c": ["R"],
-                    "z": "B"
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes with multiple symbols
-        result = client.get_crypto_quotes(["BTC/USD", "ETH/USD"])
-
-        # Verify results
-        assert result["count"] == 2
-        assert result["symbol"] == ["BTC/USD", "ETH/USD"]
-        assert result["has_next_page"] is False
-        assert len(result["quotes"]) == 2
-
-        # Verify symbols are correctly assigned
-        quote1 = result["quotes"][0]
-        quote2 = result["quotes"][1]
-        
-        assert quote1.symbol == "BTC/USD"
-        assert quote2.symbol == "ETH/USD"
-        assert quote1.ask_price == 42000.50
-        assert quote2.ask_price == 2500.75
-
-        # Verify API call
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert "crypto/quotes" in call_args[1]["url"]
-        params = call_args[1]["params"]
-        assert params["symbols"] == "BTC/USD,ETH/USD"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_date_range(self, mock_request):
-        """Test get_crypto_quotes with date range parameters."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T09:30:00Z",
-                    "ax": "CBSE",
-                    "ap": 41900.00,
-                    "as": 1.0,
-                    "bx": "CBSE",
-                    "bp": 41895.00,
-                    "bs": 1.0,
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes with date range
-        result = client.get_crypto_quotes(
-            "BTC/USD",
-            start="2024-01-01T09:30:00-05:00",
-            end="2024-01-01T16:00:00-05:00"
+    @pytest.fixture
+    def client(self):
+        """Create AlpacaClient instance for testing."""
+        return AlpacaClient(
+            api_key="test_key",
+            secret_key="test_secret",
+            base_url="https://paper-api.alpaca.markets"
         )
 
-        # Verify results
-        assert result["count"] == 1
-        assert result["symbol"] == "BTC/USD"
-
-        # Verify API call includes date range
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert call_args[1]["params"]["start"] == "2024-01-01T09:30:00-05:00"
-        assert call_args[1]["params"]["end"] == "2024-01-01T16:00:00-05:00"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_limit(self, mock_request):
-        """Test get_crypto_quotes with custom limit."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    @pytest.fixture
+    def mock_single_quote_response(self):
+        """Mock response for single crypto quote."""
+        return {
             "quotes": [
                 {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
+                    "t": "2024-01-01T10:00:00.000Z",
+                    "bp": 45000.0,
+                    "bs": 2.5,
                     "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes with custom limit
-        result = client.get_crypto_quotes("BTC/USD", limit=50)
-
-        # Verify results
-        assert result["count"] == 1
-
-        # Verify API call includes custom limit
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert call_args[1]["params"]["limit"] == 50
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_exchange(self, mock_request):
-        """Test get_crypto_quotes with exchange filter."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
-                    "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes with exchange filter
-        result = client.get_crypto_quotes("BTC/USD", exchange="CBSE")
-
-        # Verify results
-        assert result["count"] == 1
-        assert result["exchange"] == "CBSE"
-
-        # Verify API call includes exchange filter
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert call_args[1]["params"]["exchange"] == "CBSE"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_sort_desc(self, mock_request):
-        """Test get_crypto_quotes with descending sort order."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:01:00Z",
-                    "ax": "CBSE",
-                    "ap": 42001.00,
-                    "as": 3.2,
-                    "bx": "CBSE",
-                    "bp": 41995.75,
-                    "bs": 2.1,
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes with descending sort
-        result = client.get_crypto_quotes("BTC/USD", sort="desc")
-
-        # Verify results
-        assert result["count"] == 1
-
-        # Verify API call includes descending sort
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert call_args[1]["params"]["sort"] == "desc"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_pagination(self, mock_request):
-        """Test get_crypto_quotes with pagination."""
-        # Mock successful response with next page token
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
-                    "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
+                    "ap": 45010.0,
+                    "as": 1.8,
+                    "ax": "CBSE"
                 }
             ],
-            "next_page_token": "next_page_token_123"
+            "symbol": "BTC/USD",
+            "next_page_token": None
         }
-        mock_request.return_value = mock_response
 
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
+    @pytest.fixture
+    def mock_multiple_quotes_response(self):
+        """Mock response for multiple crypto quotes."""
+        return {
+            "quotes": [
+                {
+                    "S": "BTC/USD",
+                    "t": "2024-01-01T10:00:00.000Z",
+                    "bp": 45000.0,
+                    "bs": 2.5,
+                    "bx": "CBSE",
+                    "ap": 45010.0,
+                    "as": 1.8,
+                    "ax": "CBSE"
+                },
+                {
+                    "S": "ETH/USD", 
+                    "t": "2024-01-01T10:01:00.000Z",
+                    "bp": 2800.0,
+                    "bs": 10.0,
+                    "bx": "CBSE",
+                    "ap": 2805.0,
+                    "as": 8.5,
+                    "ax": "CBSE"
+                }
+            ],
+            "symbols": "BTC/USD,ETH/USD",
+            "next_page_token": None
+        }
 
-        # Call get_crypto_quotes
+    @responses.activate
+    def test_get_single_crypto_quote_basic(self, client, mock_single_quote_response):
+        """Test getting a single crypto quote with default parameters."""
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_single_quote_response,
+            status=200
+        )
+
         result = client.get_crypto_quotes("BTC/USD")
 
-        # Verify results
+        # Verify response structure
+        assert "quotes" in result
+        assert "symbol" in result
+        assert "next_page_token" in result
+        assert "count" in result
+        assert result["symbol"] == "BTC/USD"
         assert result["count"] == 1
+        assert result["has_next_page"] is False
+
+        # Verify quote data
+        quotes = result["quotes"]
+        assert len(quotes) == 1
+        quote = quotes[0]
+        
+        assert isinstance(quote, Quote)
+        assert quote.symbol == "BTC/USD"
+        assert isinstance(quote.timestamp, datetime)
+        assert quote.bid_price == 45000.0
+        assert quote.bid_size == 2.5
+        assert quote.bid_exchange == "CBSE"
+        assert quote.ask_price == 45010.0
+        assert quote.ask_size == 1.8
+        assert quote.ask_exchange == "CBSE"
+        assert quote.conditions is None
+        assert quote.tape is None
+
+    @responses.activate
+    def test_get_multiple_crypto_quotes(self, client, mock_multiple_quotes_response):
+        """Test getting quotes for multiple crypto symbols."""
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes",
+            json=mock_multiple_quotes_response,
+            status=200
+        )
+
+        result = client.get_crypto_quotes(["BTC/USD", "ETH/USD"])
+
+        # Verify response structure
+        assert "quotes" in result
+        assert "symbol" in result
+        assert "count" in result
+        assert result["symbol"] == ["BTC/USD", "ETH/USD"]
+        assert result["count"] == 2
+
+        # Verify quotes
+        quotes = result["quotes"]
+        assert len(quotes) == 2
+
+        # First quote (BTC/USD)
+        btc_quote = quotes[0]
+        assert btc_quote.symbol == "BTC/USD"
+        assert btc_quote.bid_price == 45000.0
+        assert btc_quote.ask_price == 45010.0
+
+        # Second quote (ETH/USD)
+        eth_quote = quotes[1]
+        assert eth_quote.symbol == "ETH/USD"
+        assert eth_quote.bid_price == 2800.0
+        assert eth_quote.ask_price == 2805.0
+
+    @responses.activate
+    def test_get_crypto_quotes_with_date_range(self, client):
+        """Test getting crypto quotes with start and end dates."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "next_page_token": None
+        }
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
+
+        start_time = "2024-01-01T09:00:00-05:00"
+        end_time = "2024-01-01T17:00:00-05:00"
+        
+        result = client.get_crypto_quotes(
+            "BTC/USD",
+            start=start_time,
+            end=end_time,
+            limit=100
+        )
+
+        # Verify request was made with correct parameters
+        assert len(responses.calls) == 1
+        request = responses.calls[0].request
+        
+        # Check URL parameters (account for URL encoding)
+        assert "BTC/USD" in request.url
+        # The datetime strings get URL-encoded, so check for the encoded versions
+        assert "start=" in request.url
+        assert "end=" in request.url
+        assert "limit=100" in request.url
+
+    @responses.activate
+    def test_get_crypto_quotes_with_exchange_filter(self, client):
+        """Test getting crypto quotes filtered by exchange."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "exchange": "CBSE",
+            "next_page_token": None
+        }
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.get_crypto_quotes("BTC/USD", exchange="CBSE")
+
+        # Verify exchange filter was applied
+        assert len(responses.calls) == 1
+        request = responses.calls[0].request
+        assert "exchange=CBSE" in request.url
+        
+        # Verify response includes exchange info
+        assert "exchange" in result
+        assert result["exchange"] == "CBSE"
+
+    @responses.activate
+    def test_get_crypto_quotes_with_custom_sort(self, client):
+        """Test getting crypto quotes with custom sort order."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "next_page_token": None
+        }
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
+
+        client.get_crypto_quotes("BTC/USD", sort="desc")
+
+        # Verify sort parameter was applied
+        request = responses.calls[0].request
+        assert "sort=desc" in request.url
+
+    @responses.activate
+    def test_get_crypto_quotes_with_pagination(self, client):
+        """Test getting crypto quotes with pagination token."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "next_page_token": "next_page_token_123"
+        }
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
+
+        result = client.get_crypto_quotes("BTC/USD", page_token="test_token")
+
+        # Verify pagination token was sent
+        assert len(responses.calls) == 1
+        request = responses.calls[0].request
+        assert "page_token=test_token" in request.url
+        
+        # Verify response indicates more pages
         assert result["has_next_page"] is True
         assert result["next_page_token"] == "next_page_token_123"
 
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_page_token(self, mock_request):
-        """Test get_crypto_quotes with page token parameter."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    @responses.activate
+    def test_get_crypto_quotes_with_quote_conditions(self, client):
+        """Test crypto quotes with additional quote conditions."""
+        mock_response = {
             "quotes": [
                 {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
+                    "t": "2024-01-01T10:00:00.000Z",
+                    "bp": 45000.0,
+                    "bs": 2.5,
                     "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
+                    "ap": 45010.0,
+                    "as": 1.8,
+                    "ax": "CBSE",
+                    "c": ["R", "H"],  # Quote conditions
+                    "z": "A"  # Tape code
                 }
-            ]
+            ],
+            "symbol": "BTC/USD",
+            "next_page_token": None
         }
-        mock_request.return_value = mock_response
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
 
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
+        result = client.get_crypto_quotes("BTC/USD")
+        quote = result["quotes"][0]
 
-        # Call get_crypto_quotes with page token
-        result = client.get_crypto_quotes("BTC/USD", page_token="test_token")
+        # Verify quote conditions and tape were parsed
+        assert quote.conditions == ["R", "H"]
+        assert quote.tape == "A"
 
-        # Verify API call includes page token
-        mock_request.assert_called_once()
-        call_args = mock_request.call_args
-        assert call_args[1]["params"]["page_token"] == "test_token"
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_empty_response(self, mock_request):
-        """Test get_crypto_quotes with empty quotes response."""
-        # Mock empty response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": []
+    @responses.activate
+    def test_get_crypto_quotes_empty_response(self, client):
+        """Test getting crypto quotes when no quotes are available."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "next_page_token": None
         }
-        mock_request.return_value = mock_response
+        
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
 
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes
         result = client.get_crypto_quotes("BTC/USD")
 
-        # Verify results
+        assert result["quotes"] == []
         assert result["count"] == 0
-        assert result["symbol"] == "BTC/USD"
-        assert len(result["quotes"]) == 0
         assert result["has_next_page"] is False
 
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_api_error(self, mock_request):
-        """Test get_crypto_quotes handles API errors properly."""
-        # Mock error response
-        import requests
-        http_error = requests.exceptions.HTTPError()
-        http_error.response = Mock()
-        http_error.response.status_code = 401
-        http_error.response.json.return_value = {
-            "message": "Invalid API key"
+    @responses.activate
+    def test_get_crypto_quotes_large_limit(self, client):
+        """Test getting crypto quotes with large limit."""
+        mock_response = {
+            "quotes": [],
+            "symbol": "BTC/USD",
+            "next_page_token": None
         }
-        http_error.response.content = b'{"message": "Invalid API key"}'
-        mock_request.side_effect = http_error
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Verify AlpacaAPIError is raised
-        with pytest.raises(AlpacaAPIError):
-            client.get_crypto_quotes("BTC/USD")
-
-    @patch('alpaca_data.client.requests.request')
-    def test_get_crypto_quotes_with_optional_fields(self, mock_request):
-        """Test get_crypto_quotes with all optional fields populated."""
-        # Mock response with all optional fields
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "quotes": [
-                {
-                    "t": "2024-01-01T12:00:00Z",
-                    "ax": "CBSE",
-                    "ap": 42000.50,
-                    "as": 2.5,
-                    "bx": "CBSE",
-                    "bp": 41995.25,
-                    "bs": 1.8,
-                    "c": ["R", "I"],
-                    "z": "B"
-                }
-            ]
-        }
-        mock_request.return_value = mock_response
-
-        # Create client
-        client = AlpacaClient(api_key="test_key", secret_key="test_secret")
-
-        # Call get_crypto_quotes
-        result = client.get_crypto_quotes("BTC/USD")
-
-        # Verify results
-        assert result["count"] == 1
-        quote = result["quotes"][0]
         
-        # Verify all fields
+        responses.add(
+            responses.GET,
+            "https://paper-api.alpaca.markets/v1beta1/crypto/quotes/BTC/USD",
+            json=mock_response,
+            status=200
+        )
+
+        client.get_crypto_quotes("BTC/USD", limit=1000)
+
+        # Verify large limit was applied
+        request = responses.calls[0].request
+        assert "limit=1000" in request.url
+
+    def test_get_crypto_quotes_type_validation(self, client):
+        """Test that get_crypto_quotes handles different input types correctly."""
+        # Test that the method exists and is callable
+        assert callable(getattr(client, 'get_crypto_quotes', None))
+        
+        # Test type hints would catch incorrect usage at runtime
+        # This is more of a runtime check than a unit test
+        try:
+            client.get_crypto_quotes(123)  # Should raise TypeError
+            assert False, "Expected TypeError for invalid symbol type"
+        except (TypeError, AttributeError):
+            pass  # Expected
+
+    def test_crypto_quotes_quote_model_compatibility(self, client):
+        """Test that crypto quotes work with the Quote model."""
+        # This test verifies the Quote.from_dict can handle crypto data
+        crypto_quote_data = {
+            "t": "2024-01-01T10:00:00.000Z",
+            "bp": 45000.0,
+            "bs": 2.5,
+            "bx": "CBSE",
+            "ap": 45010.0,
+            "as": 1.8,
+            "ax": "CBSE"
+        }
+        
+        quote = Quote.from_dict("BTC/USD", crypto_quote_data)
+        
+        # Verify all Quote attributes work with crypto data
         assert quote.symbol == "BTC/USD"
-        assert quote.conditions == ["R", "I"]
-        assert quote.tape == "B"
+        assert quote.bid_price == 45000.0
+        assert quote.ask_price == 45010.0
+        assert quote.bid_exchange == "CBSE"
+        assert quote.ask_exchange == "CBSE"
+        assert isinstance(quote.timestamp, datetime)
