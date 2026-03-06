@@ -49,7 +49,13 @@ class RateLimiter:
             strategy: How to handle token exhaustion
             max_retries: Max retry attempts
             retry_backoff: Exponential backoff multiplier
+            
+        Raises:
+            ValueError: If rate_per_minute is not positive
         """
+        if rate_per_minute <= 0:
+            raise ValueError(f"rate_per_minute must be positive, got {rate_per_minute}")
+        
         self.rate_per_minute = rate_per_minute
         self.bucket_capacity = bucket_capacity or rate_per_minute
         self.strategy = strategy

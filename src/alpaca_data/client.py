@@ -3,9 +3,15 @@
 import os
 import requests
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from .rate_limiter import RateLimiter
-from .exceptions import AlpacaRateLimitError
+from .exceptions import (
+    AlpacaAPIError,
+    AlpacaAuthError,
+    AlpacaNotFoundError,
+    AlpacaValidationError,
+    AlpacaRateLimitError
+)
 
 
 class AlpacaClient:
@@ -103,32 +109,43 @@ class AlpacaClient:
                     response.raise_for_status()
                     return response
                 except requests.exceptions.HTTPError as e:
-                    # Handle 429 (rate limit exceeded) with retry logic
-                    if e.response.status_code == 429:
-                        retry_after = int(e.response.headers.get('Retry-After', 60))
-                        # Wait for the specified retry-after period
-                        time.sleep(retry_after)
-                        
-                        # Retry the request once after waiting
-                        response = requests.request(
-                            method=method,
-                            url=url,
-                            headers=headers,
-                            params=params,
-                            json=data,
-                            timeout=30,
-                        )
-                        response.raise_for_status()
-                        return response
+                    status_code = e.response.status_code
                     
-                    # Handle other HTTP errors
-                    elif e.response.status_code == 401:
-                        raise ValueError("Invalid API credentials. Check your API key and secret.")
+                    # Handle specific HTTP status codes with custom exceptions
+                    if status_code == 401:
+                        raise AlpacaAuthError(
+                            "Invalid API credentials. Check your API key and secret.",
+                            status_code
+                        )
+                    elif status_code == 404:
+                        raise AlpacaNotFoundError(
+                            f"Resource not found: {endpoint}",
+                            status_code
+                        )
+                    elif status_code == 422:
+                        error_data = e.response.json() if e.response.content else {}
+                        message = error_data.get('message', 'Request validation failed')
+                        raise AlpacaValidationError(message, status_code)
+                    elif status_code == 429:
+                        retry_after = int(e.response.headers.get('Retry-After', 60))
+                        raise AlpacaRateLimitError(
+                            f"Rate limit exceeded. Retry after {retry_after} seconds.",
+                            retry_after
+                        )
                     else:
-                        raise
+                        # For other 4xx and 5xx errors
+                        error_data = e.response.json() if e.response.content else {}
+                        message = error_data.get('message', f'HTTP error {status_code}')
+                        raise AlpacaAPIError(message, status_code)
                         
+                except requests.exceptions.ConnectionError as e:
+                    raise AlpacaAPIError(f"Failed to connect to Alpaca API: {e}", None)
+                
+                except requests.exceptions.Timeout as e:
+                    raise AlpacaAPIError(f"Request timed out: {e}", None)
+                
                 except requests.exceptions.RequestException as e:
-                    raise ConnectionError(f"Failed to connect to Alpaca API: {e}")
+                    raise AlpacaAPIError(f"Request failed: {e}", None)
                     
         except RuntimeError as e:
             # Rate limiter threw an exception (THROTTLE strategy)
@@ -170,3 +187,113 @@ class AlpacaClient:
             return response.status_code == 200
         except Exception:
             return False
+
+    def get_bars(
+        self,
+        symbols: str | List[str],
+        timeframe: str = "1Day",
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        adjustment: str = "all",
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get historical OHLCV bars for one or more symbols.
+        
+        Args:
+            symbols: Single symbol (str) or multiple symbols (list) to retrieve bars for
+            timeframe: Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of bars to return (max 1000, default 1000)
+            adjustment: Split adjustment ('all', 'raw', 'splits_only', 'dividends_only')
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - bars: List of Bar objects
+                - symbol: The symbol(s) requested
+                - timeframe: The timeframe used
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of bars returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_bars("AAPL", timeframe="1Day", start="2024-01-01")
+            >>> print(f"Got {len(result['bars'])} bars for {result['symbol']}")
+            
+            >>> # Multiple symbols
+            >>> result = client.get_bars(["AAPL", "GOOGL"], timeframe="1Hour")
+            >>> for bar in result['bars']:
+            ...     print(f"{bar.symbol}: {bar.timestamp} {bar.close}")
+        """
+        from .models import Bar
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v2/stocks/{symbols}/bars"
+            params = {
+                "timeframe": timeframe,
+                "limit": limit,
+                "adjustment": adjustment,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v2/stocks/bars"
+            params = {
+                "symbols": ",".join(symbols),
+                "timeframe": timeframe,
+                "limit": limit,
+                "adjustment": adjustment,
+                "sort": sort,
+            }
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse bars from response
+        bars = []
+        bars_data = data.get("bars", [])
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            for bar_data in bars_data:
+                bars.append(Bar.from_dict(symbols, bar_data))
+        else:
+            # Multi-symbol response - each bar includes symbol field
+            for bar_data in bars_data:
+                symbol = bar_data.get("S", bar_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Bar.from_dict
+                bar_data_copy = bar_data.copy()
+                bar_data_copy.pop("S", None)
+                bar_data_copy.pop("symbol", None)
+                bars.append(Bar.from_dict(symbol, bar_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "bars": bars,
+            "symbol": symbols,
+            "timeframe": timeframe,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(bars),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return result
