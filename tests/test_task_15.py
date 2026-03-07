@@ -158,9 +158,15 @@ class TestDataModels(unittest.TestCase):
         )
         self.assertIsInstance(valid_snapshot, Snapshot)
         
-        # Invalid snapshot - no data components
-        with self.assertRaises(ValueError):
-            Snapshot(symbol="AAPL")  # No data components
+        # Valid empty snapshot - no data components (for empty API responses)
+        empty_snapshot = Snapshot(symbol="AAPL")
+        self.assertIsInstance(empty_snapshot, Snapshot)
+        self.assertEqual(empty_snapshot.symbol, "AAPL")
+        self.assertIsNone(empty_snapshot.latest_trade)
+        self.assertIsNone(empty_snapshot.latest_quote)
+        self.assertIsNone(empty_snapshot.minute_bar)
+        self.assertIsNone(empty_snapshot.daily_bar)
+        self.assertIsNone(empty_snapshot.prev_daily_bar)
 
     def test_news_validation(self):
         """Test News model validation."""
