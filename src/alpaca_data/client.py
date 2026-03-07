@@ -1122,3 +1122,82 @@ class AlpacaClient:
             result["has_next_page"] = False
             
         return result
+
+    def get_crypto_snapshot(
+        self,
+        symbol_or_symbols: str | List[str],
+        exchange: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get latest market data snapshot for crypto pairs (BTC/USD, ETH/USD, etc.).
+        
+        Args:
+            symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
+            exchange: Exchange to filter by (optional)
+            
+        Returns:
+            Dictionary containing:
+                - snapshots: List of Snapshot objects
+                - symbol: The crypto symbol(s) requested
+                - exchange: Exchange filter applied (if any)
+                - count: Number of snapshots returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_crypto_snapshot("BTC/USD")
+            >>> print(f"Got snapshot for {result["symbol"]}: {result["snapshots"][0]}")
+            
+            >>> # Multiple crypto pairs
+            >>> result = client.get_crypto_snapshot(["BTC/USD", "ETH/USD"])
+            >>> for snapshot in result["snapshots"]:
+            ...     print(f"{snapshot.symbol}: Latest trade ${snapshot.latest_trade.price}")
+        """
+        from .models import Snapshot
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbol_or_symbols, str):
+            endpoint = f"/v1beta1/crypto/snapshots/{symbol_or_symbols}"
+            params = {}
+        else:
+            endpoint = "/v1beta1/crypto/snapshots"
+            params = {
+                "symbols": ",".join(symbol_or_symbols),
+            }
+        
+        # Add optional parameters
+        if exchange:
+            params["exchange"] = exchange
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse snapshots from response
+        snapshots = []
+        
+        if isinstance(symbol_or_symbols, str):
+            # Single symbol response
+            snapshot_data = data.get("snapshot", {})
+            snapshots.append(Snapshot.from_dict(symbol_or_symbols, snapshot_data))
+        else:
+            # Multi-symbol response
+            snapshots_data = data.get("snapshots", [])
+            for snapshot_data in snapshots_data:
+                symbol = snapshot_data.get("S", snapshot_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Snapshot.from_dict
+                snapshot_data_copy = snapshot_data.copy()
+                snapshot_data_copy.pop("S", None)
+                snapshot_data_copy.pop("symbol", None)
+                snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "snapshots": snapshots,
+            "symbol": symbol_or_symbols,
+            "count": len(snapshots),
+        }
+        
+        # Add optional metadata
+        if exchange:
+            result["exchange"] = exchange
+            
+        return result
