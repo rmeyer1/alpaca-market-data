@@ -22,7 +22,7 @@ from .exceptions import (
     AlpacaNotFoundError,
     AlpacaValidationError,
 )
-from .models import Bar, Quote, Trade, Snapshot, News
+from .models import Bar, Quote, Trade, Snapshot, News, Greeks, OptionQuote, OptionTrade, OptionSnapshot
 from .formatters import (
     OutputFormatter,
     JSONFormatter,
@@ -48,6 +48,10 @@ __all__ = [
     "Trade",
     "Snapshot",
     "News",
+    "Greeks",
+    "OptionQuote",
+    "OptionTrade",
+    "OptionSnapshot",
     "OutputFormatter",
     "JSONFormatter",
     "CSVFormatter",

@@ -198,6 +198,7 @@ echo "✅ CLI tools work"
 - Market snapshots (comprehensive data)
 - News articles (with content option)
 - Cryptocurrency data (stocks and crypto)
+- Options data (quotes, trades, snapshots, and Greeks)
 
 ### Data Analysis
 - Price trend analysis
