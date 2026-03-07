@@ -460,3 +460,360 @@ class News:
             "symbols": self.symbols,
             "source": self.source,
         }
+
+
+@dataclass(frozen=True)
+class Greeks:
+    """Option Greeks data with validation.
+
+    Attributes:
+        delta: Delta value (-1.0 to 1.0).
+        gamma: Gamma value (must be non-negative).
+        theta: Theta value (typically negative).
+        vega: Vega value (typically positive).
+        rho: Rho value (positive/negative based on call/put).
+    """
+
+    delta: float
+    gamma: float
+    theta: float
+    vega: float
+    rho: float
+
+    def __post_init__(self):
+        """Validate Greeks data after initialization."""
+        # Validate delta range (-1.0 to 1.0)
+        if not -1.0 <= self.delta <= 1.0:
+            raise ValueError(f"Delta must be between -1.0 and 1.0, got {self.delta}")
+        
+        # Validate non-negative values (gamma, vega)
+        for field, value in [("gamma", self.gamma), ("vega", self.vega)]:
+            if value < 0:
+                raise ValueError(f"{field} must be non-negative, got {value}")
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Greeks":
+        """Create Greeks from API response dictionary."""
+        required_fields = ["delta", "gamma", "theta", "vega", "rho"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Required field '{field}' missing from Greeks data")
+        
+        try:
+            return cls(
+                delta=float(data["delta"]),
+                gamma=float(data["gamma"]),
+                theta=float(data["theta"]),
+                vega=float(data["vega"]),
+                rho=float(data["rho"]),
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid Greeks data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert Greeks to dictionary format."""
+        return {
+            "delta": self.delta,
+            "gamma": self.gamma,
+            "theta": self.theta,
+            "vega": self.vega,
+            "rho": self.rho,
+        }
+
+
+@dataclass(frozen=True)
+class OptionQuote:
+    """Option quote data with validation.
+
+    Attributes:
+        symbol: Option symbol (e.g., "AAPL220121C00150000").
+        timestamp: Quote timestamp.
+        ask_exchange: Exchange code for ask.
+        ask_price: Ask price (must be > bid_price).
+        ask_size: Ask size (must be positive).
+        bid_exchange: Exchange code for bid.
+        bid_price: Bid price (must be positive).
+        bid_size: Bid size (must be positive).
+        conditions: Quote conditions (optional).
+        underlying_price: Current price of underlying asset (optional).
+        iv: Implied volatility (optional, must be non-negative).
+        open_interest: Open interest (optional, must be non-negative).
+        greeks: Option Greeks (optional).
+    """
+
+    symbol: str
+    timestamp: datetime
+    ask_exchange: str
+    ask_price: float
+    ask_size: float
+    bid_exchange: str
+    bid_price: float
+    bid_size: float
+    conditions: Optional[List[str]] = None
+    underlying_price: Optional[float] = None
+    iv: Optional[float] = None
+    open_interest: Optional[int] = None
+    greeks: Optional[Greeks] = None
+
+    def __post_init__(self):
+        """Validate OptionQuote data after initialization."""
+        # Validate symbol format (should match options pattern)
+        if not isinstance(self.symbol, str) or not self.symbol.strip():
+            raise ValueError("Symbol must be a non-empty string")
+        
+        # Validate exchange codes
+        if not isinstance(self.ask_exchange, str) or not self.ask_exchange.strip():
+            raise ValueError("Ask exchange must be a non-empty string")
+        if not isinstance(self.bid_exchange, str) or not self.bid_exchange.strip():
+            raise ValueError("Bid exchange must be a non-empty string")
+        
+        # Validate price relationships
+        if self.ask_price <= self.bid_price:
+            raise ValueError(f"Ask price ({self.ask_price}) must be greater than bid price ({self.bid_price})")
+        
+        # Validate positive values
+        for field, value in [("ask_price", self.ask_price), ("bid_price", self.bid_price), 
+                           ("ask_size", self.ask_size), ("bid_size", self.bid_size)]:
+            if value <= 0:
+                raise ValueError(f"{field} must be positive, got {value}")
+        
+        # Validate optional fields
+        if self.underlying_price is not None and self.underlying_price <= 0:
+            raise ValueError("Underlying price must be positive")
+        
+        if self.iv is not None and self.iv < 0:
+            raise ValueError("Implied volatility must be non-negative")
+        
+        if self.open_interest is not None and self.open_interest < 0:
+            raise ValueError("Open interest must be non-negative")
+        
+        if self.conditions is not None and not isinstance(self.conditions, list):
+            raise ValueError("Conditions must be a list")
+
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "OptionQuote":
+        """Create OptionQuote from API response dictionary."""
+        # Validate required fields
+        required_fields = ["t", "ax", "ap", "as", "bx", "bp", "bs"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Required field '{field}' missing from option quote data")
+        
+        try:
+            greeks_data = data.get("greeks")
+            greeks = Greeks.from_dict(greeks_data) if greeks_data else None
+            
+            return cls(
+                symbol=symbol,
+                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+                ask_exchange=data["ax"],
+                ask_price=float(data["ap"]),
+                ask_size=float(data["as"]),
+                bid_exchange=data["bx"],
+                bid_price=float(data["bp"]),
+                bid_size=float(data["bs"]),
+                conditions=data.get("c"),
+                underlying_price=data.get("underlying_price"),
+                iv=data.get("iv"),
+                open_interest=data.get("open_interest"),
+                greeks=greeks,
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid option quote data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert OptionQuote to dictionary format."""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "ask_exchange": self.ask_exchange,
+            "ask_price": self.ask_price,
+            "ask_size": self.ask_size,
+            "bid_exchange": self.bid_exchange,
+            "bid_price": self.bid_price,
+            "bid_size": self.bid_size,
+            "conditions": self.conditions,
+            "underlying_price": self.underlying_price,
+            "iv": self.iv,
+            "open_interest": self.open_interest,
+            "greeks": self.greeks.to_dict() if self.greeks else None,
+        }
+
+
+@dataclass(frozen=True)
+class OptionTrade:
+    """Option trade data with validation.
+
+    Attributes:
+        symbol: Option symbol (e.g., "AAPL220121C00150000").
+        timestamp: Trade timestamp.
+        exchange: Exchange code.
+        price: Trade price (must be positive).
+        size: Trade size (must be positive).
+        conditions: Trade conditions (optional).
+        id: Trade ID (optional).
+        underlying_price: Current price of underlying asset (optional).
+        iv: Implied volatility (optional, must be non-negative).
+        greeks: Option Greeks (optional).
+    """
+
+    symbol: str
+    timestamp: datetime
+    exchange: str
+    price: float
+    size: float
+    conditions: Optional[List[str]] = None
+    id: Optional[str] = None
+    underlying_price: Optional[float] = None
+    iv: Optional[float] = None
+    greeks: Optional[Greeks] = None
+
+    def __post_init__(self):
+        """Validate OptionTrade data after initialization."""
+        # Validate symbol format
+        if not isinstance(self.symbol, str) or not self.symbol.strip():
+            raise ValueError("Symbol must be a non-empty string")
+        
+        # Validate exchange code
+        if not isinstance(self.exchange, str) or not self.exchange.strip():
+            raise ValueError("Exchange must be a non-empty string")
+        
+        # Validate positive values
+        if self.price <= 0:
+            raise ValueError(f"Price must be positive, got {self.price}")
+        if self.size <= 0:
+            raise ValueError(f"Size must be positive, got {self.size}")
+        
+        # Validate optional fields
+        if self.underlying_price is not None and self.underlying_price <= 0:
+            raise ValueError("Underlying price must be positive")
+        
+        if self.iv is not None and self.iv < 0:
+            raise ValueError("Implied volatility must be non-negative")
+        
+        if self.conditions is not None and not isinstance(self.conditions, list):
+            raise ValueError("Conditions must be a list")
+        
+        if self.id is not None and not isinstance(self.id, str):
+            raise ValueError("ID must be a string")
+
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "OptionTrade":
+        """Create OptionTrade from API response dictionary."""
+        # Validate required fields
+        required_fields = ["t", "x", "p", "s"]
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f"Required field '{field}' missing from option trade data")
+        
+        try:
+            greeks_data = data.get("greeks")
+            greeks = Greeks.from_dict(greeks_data) if greeks_data else None
+            
+            return cls(
+                symbol=symbol,
+                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+                exchange=data["x"],
+                price=float(data["p"]),
+                size=float(data["s"]),
+                conditions=data.get("c"),
+                id=data.get("i"),
+                underlying_price=data.get("underlying_price"),
+                iv=data.get("iv"),
+                greeks=greeks,
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid option trade data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert OptionTrade to dictionary format."""
+        return {
+            "symbol": self.symbol,
+            "timestamp": self.timestamp.isoformat(),
+            "exchange": self.exchange,
+            "price": self.price,
+            "size": self.size,
+            "conditions": self.conditions,
+            "id": self.id,
+            "underlying_price": self.underlying_price,
+            "iv": self.iv,
+            "greeks": self.greeks.to_dict() if self.greeks else None,
+        }
+
+
+@dataclass(frozen=True)
+class OptionSnapshot:
+    """Option snapshot data with validation.
+
+    Attributes:
+        symbol: Option symbol (e.g., "AAPL220121C00150000").
+        latest_trade: Latest trade (optional).
+        latest_quote: Latest quote (optional).
+        minute_bar: Current minute bar (optional).
+        daily_bar: Current daily bar (optional).
+        greeks: Option Greeks (optional).
+        iv: Implied volatility (optional).
+        open_interest: Open interest (optional, must be non-negative).
+    """
+
+    symbol: str
+    latest_trade: Optional[OptionTrade] = None
+    latest_quote: Optional[OptionQuote] = None
+    minute_bar: Optional[Bar] = None
+    daily_bar: Optional[Bar] = None
+    greeks: Optional[Greeks] = None
+    iv: Optional[float] = None
+    open_interest: Optional[int] = None
+
+    def __post_init__(self):
+        """Validate OptionSnapshot data after initialization."""
+        # Validate symbol format
+        if not isinstance(self.symbol, str) or not self.symbol.strip():
+            raise ValueError("Symbol must be a non-empty string")
+        
+        # Validate that at least one data component is present
+        if not any([self.latest_trade, self.latest_quote, self.minute_bar, self.daily_bar]):
+            raise ValueError("Option snapshot must contain at least one data component")
+        
+        # Validate optional fields
+        if self.iv is not None and self.iv < 0:
+            raise ValueError("Implied volatility must be non-negative")
+        
+        if self.open_interest is not None and self.open_interest < 0:
+            raise ValueError("Open interest must be non-negative")
+
+    @classmethod
+    def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "OptionSnapshot":
+        """Create OptionSnapshot from API response dictionary."""
+        try:
+            latest_trade_data = data.get("latest_trade")
+            latest_quote_data = data.get("latest_quote")
+            minute_bar_data = data.get("minute_bar")
+            daily_bar_data = data.get("daily_bar")
+            greeks_data = data.get("greeks")
+
+            return cls(
+                symbol=symbol,
+                latest_trade=OptionTrade.from_dict(symbol, latest_trade_data) if latest_trade_data else None,
+                latest_quote=OptionQuote.from_dict(symbol, latest_quote_data) if latest_quote_data else None,
+                minute_bar=Bar.from_dict(symbol, minute_bar_data) if minute_bar_data else None,
+                daily_bar=Bar.from_dict(symbol, daily_bar_data) if daily_bar_data else None,
+                greeks=Greeks.from_dict(greeks_data) if greeks_data else None,
+                iv=data.get("iv"),
+                open_interest=data.get("open_interest"),
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid option snapshot data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert OptionSnapshot to dictionary format."""
+        return {
+            "symbol": self.symbol,
+            "latest_trade": self.latest_trade.to_dict() if self.latest_trade else None,
+            "latest_quote": self.latest_quote.to_dict() if self.latest_quote else None,
+            "minute_bar": self.minute_bar.to_dict() if self.minute_bar else None,
+            "daily_bar": self.daily_bar.to_dict() if self.daily_bar else None,
+            "greeks": self.greeks.to_dict() if self.greeks else None,
+            "iv": self.iv,
+            "open_interest": self.open_interest,
+        }

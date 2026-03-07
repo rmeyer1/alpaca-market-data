@@ -1109,6 +1109,279 @@ class AlpacaClient:
             
         return self._apply_formatting(result, output_format)
 
+    def get_option_quotes(
+        self,
+        symbols: str | List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
+        """Get latest and historical quotes for options symbols.
+        
+        Args:
+            symbols: Single option symbol (str) or multiple option symbols (list)
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of quotes to return (max 1000, default 1000)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - quotes: List of OptionQuote objects
+                - symbol: The option symbol(s) requested
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of quotes returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_option_quotes("AAPL220121C00150000", limit=100)
+            >>> print(f"Got {len(result['quotes'])} option quotes")
+            >>> for quote in result['quotes']:
+            ...     print(f"{quote.symbol}: Bid ${quote.bid_price}, Ask ${quote.ask_price}")
+            ...     if quote.greeks:
+            ...         print(f"  Delta: {quote.greeks.delta:.3f}, IV: {quote.iv}")
+        """
+        from .models import OptionQuote
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v1beta1/options/quotes/{symbols}"
+            params = {
+                "limit": limit,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v1beta1/options/quotes"
+            params = {
+                "symbols": ",".join(symbols),
+                "limit": limit,
+                "sort": sort,
+            }
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse option quotes from response
+        quotes = []
+        quotes_data = data.get("quotes", [])
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            for quote_data in quotes_data:
+                quotes.append(OptionQuote.from_dict(symbols, quote_data))
+        else:
+            # Multi-symbol response - each quote includes symbol field
+            for quote_data in quotes_data:
+                symbol = quote_data.get("S", quote_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for OptionQuote.from_dict
+                quote_data_copy = quote_data.copy()
+                quote_data_copy.pop("S", None)
+                quote_data_copy.pop("symbol", None)
+                quotes.append(OptionQuote.from_dict(symbol, quote_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "quotes": quotes,
+            "symbol": symbols,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(quotes),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return self._apply_formatting(result, output_format)
+
+    def get_option_trades(
+        self,
+        symbols: str | List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
+        """Get latest and historical trades for options symbols.
+        
+        Args:
+            symbols: Single option symbol (str) or multiple option symbols (list)
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of trades to return (max 1000, default 1000)
+            sort: Sort order ('asc' for ascending, 'desc' for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - trades: List of OptionTrade objects
+                - symbol: The option symbol(s) requested
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of trades returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_option_trades("AAPL220121C00150000", limit=100)
+            >>> print(f"Got {len(result['trades'])} option trades")
+            >>> for trade in result['trades']:
+            ...     print(f"{trade.symbol}: {trade.size} @ ${trade.price}")
+            ...     if trade.greeks:
+            ...         print(f"  Greeks: Δ={trade.greeks.delta:.3f}, Γ={trade.greeks.gamma:.4f}")
+        """
+        from .models import OptionTrade
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v1beta1/options/trades/{symbols}"
+            params = {
+                "limit": limit,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v1beta1/options/trades"
+            params = {
+                "symbols": ",".join(symbols),
+                "limit": limit,
+                "sort": sort,
+            }
+        
+        # Add date range parameters if provided
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse option trades from response
+        trades = []
+        trades_data = data.get("trades", [])
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            for trade_data in trades_data:
+                trades.append(OptionTrade.from_dict(symbols, trade_data))
+        else:
+            # Multi-symbol response - each trade includes symbol field
+            for trade_data in trades_data:
+                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for OptionTrade.from_dict
+                trade_data_copy = trade_data.copy()
+                trade_data_copy.pop("S", None)
+                trade_data_copy.pop("symbol", None)
+                trades.append(OptionTrade.from_dict(symbol, trade_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "trades": trades,
+            "symbol": symbols,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(trades),
+        }
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return self._apply_formatting(result, output_format)
+
+    def get_option_snapshot(
+        self,
+        symbols: str | List[str],
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
+        """Get latest market data snapshot for options symbols including greeks.
+        
+        Args:
+            symbols: Single option symbol (str) or multiple option symbols (list)
+            
+        Returns:
+            Dictionary containing:
+                - snapshots: List of OptionSnapshot objects
+                - symbol: The option symbol(s) requested
+                - count: Number of snapshots returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_option_snapshot("AAPL220121C00150000")
+            >>> print(f"Got snapshot for {result['symbol']}")
+            >>> snapshot = result['snapshots'][0]
+            >>> print(f"Latest trade: ${snapshot.latest_trade.price} with delta: {snapshot.greeks.delta:.3f}")
+            >>> print(f"Open interest: {snapshot.open_interest}, IV: {snapshot.iv}")
+            
+            >>> # Multiple option symbols
+            >>> result = client.get_option_snapshot(["AAPL220121C00150000", "AAPL220121P00150000"])
+            >>> for snapshot in result['snapshots']:
+            ...     option_type = "CALL" if "C" in snapshot.symbol else "PUT"
+            ...     print(f"{snapshot.symbol} ({option_type}): ${snapshot.latest_quote.bid_price} - ${snapshot.latest_quote.ask_price}")
+        """
+        from .models import OptionSnapshot
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbols, str):
+            endpoint = f"/v1beta1/options/snapshots/{symbols}"
+            params = {}
+        else:
+            endpoint = "/v1beta1/options/snapshots"
+            params = {
+                "symbols": ",".join(symbols),
+            }
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse option snapshots from response
+        snapshots = []
+        
+        if isinstance(symbols, str):
+            # Single symbol response
+            snapshot_data = data.get("snapshot", {})
+            snapshots.append(OptionSnapshot.from_dict(symbols, snapshot_data))
+        else:
+            # Multi-symbol response
+            snapshots_data = data.get("snapshots", [])
+            for snapshot_data in snapshots_data:
+                symbol = snapshot_data.get("S", snapshot_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for OptionSnapshot.from_dict
+                snapshot_data_copy = snapshot_data.copy()
+                snapshot_data_copy.pop("S", None)
+                snapshot_data_copy.pop("symbol", None)
+                snapshots.append(OptionSnapshot.from_dict(symbol, snapshot_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "snapshots": snapshots,
+            "symbol": symbols,
+            "count": len(snapshots),
+        }
+            
+        return self._apply_formatting(result, output_format)
+
     def _apply_formatting(
         self, 
         data: Dict[str, Any], 
