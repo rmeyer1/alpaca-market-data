@@ -82,7 +82,7 @@ class Bar:
                 close=float(data["c"]),
                 volume=float(data["v"]),
                 trade_count=data.get("n"),
-                vwap=data.get("vwap"),
+                vwap=data.get("vwap") or data.get("vw"),
             )
         except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid data format in API response: {e}")
@@ -230,9 +230,9 @@ class Trade:
         if not isinstance(self.symbol, str) or not self.symbol.strip():
             raise ValueError("Symbol must be a non-empty string")
         
-        # Validate exchange code
-        if not isinstance(self.exchange, str) or not self.exchange.strip():
-            raise ValueError("Exchange must be a non-empty string")
+        # Validate exchange code (optional for some asset types like crypto)
+        if self.exchange is not None and (not isinstance(self.exchange, str) or not self.exchange.strip()):
+            raise ValueError("Exchange must be a non-empty string if provided")
         
         # Validate positive values
         if self.price <= 0:
@@ -253,8 +253,10 @@ class Trade:
     @classmethod
     def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "Trade":
         """Create Trade from API response dictionary with validation."""
-        # Validate required fields
-        required_fields = ["t", "x", "p", "s"]
+        # Validate required fields (for stocks, exchange is required, for crypto it's optional)
+        required_fields = ["t", "p", "s"]
+        optional_fields = ["x"]  # Exchange may not be present in all responses
+        
         for field in required_fields:
             if field not in data:
                 raise ValueError(f"Required field '{field}' missing from API response")
@@ -263,7 +265,7 @@ class Trade:
             return cls(
                 symbol=symbol,
                 timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
-                exchange=data["x"],
+                exchange=data.get("x"),  # Make exchange optional
                 price=float(data["p"]),
                 size=float(data["s"]),
                 conditions=data.get("c"),
@@ -313,9 +315,8 @@ class Snapshot:
         if not isinstance(self.symbol, str) or not self.symbol.strip():
             raise ValueError("Symbol must be a non-empty string")
         
-        # Validate that at least one data component is present
-        if not any([self.latest_trade, self.latest_quote, self.minute_bar, self.daily_bar, self.prev_daily_bar]):
-            raise ValueError("Snapshot must contain at least one data component")
+        # Allow empty snapshots for handling empty API responses
+        # Don't validate that components must be present as empty snapshots are valid
 
     @classmethod
     def from_dict(cls, symbol: str, data: Dict[str, Any]) -> "Snapshot":
@@ -367,7 +368,7 @@ class News:
         source: News source (must be non-empty).
     """
 
-    id: str
+    id: Union[str, int]
     headline: str
     created_at: datetime
     symbols: List[str]
@@ -380,9 +381,9 @@ class News:
 
     def __post_init__(self):
         """Validate News data after initialization."""
-        # Validate required string fields
-        if not isinstance(self.id, str) or not self.id.strip():
-            raise ValueError("ID must be a non-empty string")
+        # Validate required string fields - ID can be string or int
+        if not isinstance(self.id, (str, int)) or (isinstance(self.id, str) and not self.id.strip()) or (isinstance(self.id, int) and self.id <= 0):
+            raise ValueError("ID must be a non-empty string or positive integer")
         
         if not isinstance(self.headline, str) or not self.headline.strip():
             raise ValueError("Headline must be a non-empty string")

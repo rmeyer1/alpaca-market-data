@@ -35,7 +35,11 @@ class TestCryptoSnapshot(unittest.TestCase):
                 },
                 "latest_quote": {
                     "ap": 50010.0,
+                    "as": 1.0,
+                    "ax": "CBSE",
                     "bp": 49990.0,
+                    "bs": 2.0,
+                    "bx": "CBSE",
                     "t": "2024-01-01T12:00:00Z"
                 }
             }
@@ -73,6 +77,15 @@ class TestCryptoSnapshot(unittest.TestCase):
                         "s": 1.5,
                         "t": "2024-01-01T12:00:00Z",
                         "i": "12345"
+                    },
+                    "latest_quote": {
+                        "ap": 50010.0,
+                        "as": 1.0,
+                        "ax": "CBSE",
+                        "bp": 49990.0,
+                        "bs": 2.0,
+                        "bx": "CBSE",
+                        "t": "2024-01-01T12:00:00Z"
                     }
                 },
                 {
@@ -82,6 +95,15 @@ class TestCryptoSnapshot(unittest.TestCase):
                         "s": 10.0,
                         "t": "2024-01-01T12:00:00Z",
                         "i": "67890"
+                    },
+                    "latest_quote": {
+                        "ap": 3010.0,
+                        "as": 5.0,
+                        "ax": "CBSE",
+                        "bp": 2990.0,
+                        "bs": 8.0,
+                        "bx": "CBSE",
+                        "t": "2024-01-01T12:00:00Z"
                     }
                 }
             ]
@@ -118,6 +140,15 @@ class TestCryptoSnapshot(unittest.TestCase):
                     "s": 1.5,
                     "t": "2024-01-01T12:00:00Z",
                     "i": "12345"
+                },
+                "latest_quote": {
+                    "ap": 50010.0,
+                    "as": 1.0,
+                    "ax": "CBSE",
+                    "bp": 49990.0,
+                    "bs": 2.0,
+                    "bx": "CBSE",
+                    "t": "2024-01-01T12:00:00Z"
                 }
             }
         }

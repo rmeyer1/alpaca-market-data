@@ -39,7 +39,7 @@ class AlpacaClient:
         rate_per_minute: int = 200,
     ):
         """Initialize the Alpaca client.
-        
+
         Args:
             api_key: Alpaca API key. If not provided, reads from ALPACA_API_KEY env var.
             secret_key: Alpaca secret key. If not provided, reads from ALPACA_API_SECRET env var.
@@ -51,7 +51,7 @@ class AlpacaClient:
         self.base_url = base_url or os.getenv(
             "ALPACA_BASE_URL", "https://paper-api.alpaca.markets"
         )
-        
+
         # Initialize rate limiter
         self.rate_limiter = RateLimiter(rate_per_minute=rate_per_minute)
 
@@ -112,7 +112,7 @@ class AlpacaClient:
                     return response
                 except requests.exceptions.HTTPError as e:
                     status_code = e.response.status_code
-                    
+
                     # Handle specific HTTP status codes with custom exceptions
                     if status_code == 401:
                         raise AlpacaAuthError(
@@ -139,16 +139,16 @@ class AlpacaClient:
                         error_data = e.response.json() if e.response.content else {}
                         message = error_data.get('message', f'HTTP error {status_code}')
                         raise AlpacaAPIError(message, status_code)
-                        
+
                 except requests.exceptions.ConnectionError as e:
                     raise AlpacaAPIError(f"Failed to connect to Alpaca API: {e}", None)
-                
+
                 except requests.exceptions.Timeout as e:
                     raise AlpacaAPIError(f"Request timed out: {e}", None)
-                
+
                 except requests.exceptions.RequestException as e:
                     raise AlpacaAPIError(f"Request failed: {e}", None)
-                    
+
         except RuntimeError as e:
             # Rate limiter threw an exception (THROTTLE strategy)
             raise AlpacaRateLimitError(str(e), retry_after=None)
@@ -203,7 +203,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get historical OHLCV bars for one or more symbols.
-        
+
         Args:
             symbols: Single symbol (str) or multiple symbols (list) to retrieve bars for
             timeframe: Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)
@@ -213,7 +213,7 @@ class AlpacaClient:
             adjustment: Split adjustment ('all', 'raw', 'splits_only', 'dividends_only')
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - bars: List of Bar objects
@@ -221,19 +221,19 @@ class AlpacaClient:
                 - timeframe: The timeframe used
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of bars returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_bars("AAPL", timeframe="1Day", start="2024-01-01")
             >>> print(f"Got {len(result['bars'])} bars for {result['symbol']}")
-            
+
             >>> # Multiple symbols
             >>> result = client.get_bars(["AAPL", "GOOGL"], timeframe="1Hour")
             >>> for bar in result['bars']:
             ...     print(f"{bar.symbol}: {bar.timestamp} {bar.close}")
         """
         from .models import Bar
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v2/stocks/{symbols}/bars"
@@ -252,7 +252,7 @@ class AlpacaClient:
                 "adjustment": adjustment,
                 "sort": sort,
             }
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -260,29 +260,37 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse bars from response
         bars = []
         bars_data = data.get("bars", [])
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             for bar_data in bars_data:
                 bars.append(Bar.from_dict(symbols, bar_data))
         else:
-            # Multi-symbol response - each bar includes symbol field
-            for bar_data in bars_data:
-                symbol = bar_data.get("S", bar_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Bar.from_dict
-                bar_data_copy = bar_data.copy()
-                bar_data_copy.pop("S", None)
-                bar_data_copy.pop("symbol", None)
-                bars.append(Bar.from_dict(symbol, bar_data_copy))
-        
+            # Multi-symbol response - the API returns {symbol: [bars]}
+            if isinstance(bars_data, dict):
+                # New format: bars_data is a dict {symbol: [bar_data]}
+                for symbol, symbol_bars in bars_data.items():
+                    for bar_data in symbol_bars:
+                        bars.append(Bar.from_dict(symbol, bar_data))
+            else:
+                # Old format: bars_data is a list of bar objects with symbol field
+                for bar_data in bars_data:
+                    if isinstance(bar_data, dict):
+                        symbol = bar_data.get("S", bar_data.get("symbol", "UNKNOWN"))
+                        # Remove symbol field from data for Bar.from_dict
+                        bar_data_copy = bar_data.copy()
+                        bar_data_copy.pop("S", None)
+                        bar_data_copy.pop("symbol", None)
+                        bars.append(Bar.from_dict(symbol, bar_data_copy))
+
         # Build response with metadata
         result = {
             "bars": bars,
@@ -291,19 +299,19 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(bars),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-        
+
         # Apply output formatting if requested
         if output_format.lower() != "dict":
             formatter = OutputFormatter()
             return formatter.format(result, output_format.lower())
-        
+
         return self._apply_formatting(result, output_format)
 
     def get_quotes(
@@ -318,7 +326,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest and historical NBBO quotes for one or more symbols.
-        
+
         Args:
             symbols: Single symbol (str) or multiple symbols (list) to retrieve quotes for
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -327,7 +335,7 @@ class AlpacaClient:
             feed: Data feed ('iex' for free tier, 'sip' for premium)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - quotes: List of Quote objects
@@ -335,17 +343,17 @@ class AlpacaClient:
                 - feed: The data feed used
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of quotes returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_quotes("AAPL", limit=100)
             >>> print(f"Got {len(result['quotes'])} quotes for {result['symbol']}")
-            
+
             >>> # With date range
             >>> result = client.get_quotes("AAPL", start="2024-01-01T09:30:00-05:00", end="2024-01-01T16:00:00-05:00")
         """
         from .models import Quote
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v2/stocks/{symbols}/quotes"
@@ -362,7 +370,7 @@ class AlpacaClient:
                 "feed": feed,
                 "sort": sort,
             }
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -370,15 +378,15 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse quotes from response
         quotes = []
         quotes_data = data.get("quotes", [])
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             for quote_data in quotes_data:
@@ -392,7 +400,7 @@ class AlpacaClient:
                 quote_data_copy.pop("S", None)
                 quote_data_copy.pop("symbol", None)
                 quotes.append(Quote.from_dict(symbol, quote_data_copy))
-        
+
         # Build response with metadata
         result = {
             "quotes": quotes,
@@ -401,14 +409,14 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(quotes),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-        
+
         # Apply output formatting if requested
         return self._apply_formatting(result, output_format)
 
@@ -419,30 +427,30 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for one or more symbols.
-        
+
         Args:
             symbols: Single symbol (str) or multiple symbols (list) to retrieve snapshots for
             feed: Data feed ('iex' for free tier, 'sip' for premium)
-            
+
         Returns:
             Dictionary containing:
                 - snapshots: List of Snapshot objects
                 - symbol: The symbol(s) requested
                 - feed: The data feed used
                 - count: Number of snapshots returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_snapshot("AAPL")
             >>> print(f"Got snapshot for {result['symbol']}: {result['snapshots'][0]}")
-            
+
             >>> # Multiple symbols
             >>> result = client.get_snapshot(["AAPL", "GOOGL"])
             >>> for snapshot in result['snapshots']:
             ...     print(f"{snapshot.symbol}: Latest trade {snapshot.latest_trade.price}")
         """
         from .models import Snapshot
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v2/stocks/{symbols}/snapshot"
@@ -455,14 +463,14 @@ class AlpacaClient:
                 "symbols": ",".join(symbols),
                 "feed": feed,
             }
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse snapshots from response
         snapshots = []
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             snapshot_data = data.get("snapshot", {})
@@ -477,7 +485,7 @@ class AlpacaClient:
                 snapshot_data_copy.pop("S", None)
                 snapshot_data_copy.pop("symbol", None)
                 snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
-        
+
         # Build response with metadata
         result = {
             "snapshots": snapshots,
@@ -485,7 +493,7 @@ class AlpacaClient:
             "feed": feed,
             "count": len(snapshots),
         }
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_trades(
@@ -500,7 +508,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get historical trades for one or more symbols.
-        
+
         Args:
             symbols: Single symbol (str) or multiple symbols (list) to retrieve trades for
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -509,7 +517,7 @@ class AlpacaClient:
             feed: Data feed ('iex' for free tier, 'sip' for premium)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - trades: List of Trade objects
@@ -517,19 +525,19 @@ class AlpacaClient:
                 - feed: The data feed used
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of trades returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_trades("AAPL", limit=100)
             >>> print(f"Got {len(result['trades'])} trades for {result['symbol']}")
-            
+
             >>> # With date range
             >>> result = client.get_trades("AAPL", start="2024-01-01T09:30:00-05:00", end="2024-01-01T16:00:00-05:00")
             >>> for trade in result['trades']:
             ...     print(f"Trade: {trade.timestamp} {trade.price} @ {trade.size}")
         """
         from .models import Trade
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v2/stocks/{symbols}/trades"
@@ -546,7 +554,7 @@ class AlpacaClient:
                 "feed": feed,
                 "sort": sort,
             }
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -554,15 +562,15 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse trades from response
         trades = []
         trades_data = data.get("trades", [])
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             for trade_data in trades_data:
@@ -576,7 +584,7 @@ class AlpacaClient:
                 trade_data_copy.pop("S", None)
                 trade_data_copy.pop("symbol", None)
                 trades.append(Trade.from_dict(symbol, trade_data_copy))
-        
+
         # Build response with metadata
         result = {
             "trades": trades,
@@ -585,14 +593,14 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(trades),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_news(
@@ -607,7 +615,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get news articles for specified symbols and date range.
-        
+
         Args:
             symbols: List of symbols to filter news by (optional)
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -616,18 +624,18 @@ class AlpacaClient:
             include_content: Whether to include full article content (default False)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored)
-            
+
         Returns:
             Dictionary containing:
                 - news: List of News objects
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of articles returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_news(symbols=["AAPL", "GOOGL"], limit=10)
             >>> print(f"Got {len(result['news'])} news articles")
-            
+
             >>> # With date range
             >>> result = client.get_news(start="2024-01-01", end="2024-01-02", include_content=True)
             >>> for article in result['news']:
@@ -636,7 +644,7 @@ class AlpacaClient:
             ...     print(f"Related: {article.symbols}")
         """
         from .models import News
-        
+
         # Build API endpoint and parameters
         endpoint = "/v1beta1/news"
         params = {
@@ -644,11 +652,11 @@ class AlpacaClient:
             "include_content": include_content,
             "sort": sort,
         }
-        
+
         # Add symbol filters
         if symbols:
             params["symbols"] = ",".join(symbols)
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -656,32 +664,32 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse news articles from response
         news_articles = []
         news_data = data.get("news", [])
-        
+
         for article_data in news_data:
             news_articles.append(News.from_dict(article_data))
-        
+
         # Build response with metadata
         result = {
             "news": news_articles,
             "next_page_token": data.get("next_page_token"),
             "count": len(news_articles),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         # Add filter info
         if symbols:
             result["symbols"] = symbols
@@ -689,7 +697,7 @@ class AlpacaClient:
             result["start"] = start
         if end:
             result["end"] = end
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_crypto_bars(
@@ -705,7 +713,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get historical OHLCV bars for crypto pairs (BTC/USD, ETH/USD, etc.).
-        
+
         Args:
             symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
             timeframe: Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)
@@ -715,7 +723,7 @@ class AlpacaClient:
             exchange: Exchange to filter by (e.g., "NYSE", "CBSE") (optional)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - bars: List of Bar objects
@@ -724,19 +732,19 @@ class AlpacaClient:
                 - exchange: Exchange filter applied (if any)
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of bars returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_crypto_bars("BTC/USD", timeframe="1Hour", limit=50)
             >>> print(f"Got {len(result['bars'])} bars for {result['symbol']}")
-            
+
             >>> # Multiple crypto pairs
             >>> result = client.get_crypto_bars(["BTC/USD", "ETH/USD"], timeframe="1Day")
             >>> for bar in result['bars']:
             ...     print(f"{bar.symbol}: {bar.timestamp} ${bar.close}")
         """
         from .models import Bar
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbol_or_symbols, str):
             endpoint = f"/v1beta1/crypto/bars/{symbol_or_symbols}"
@@ -753,7 +761,7 @@ class AlpacaClient:
                 "limit": limit,
                 "sort": sort,
             }
-        
+
         # Add optional parameters
         if start:
             params["start"] = start
@@ -763,15 +771,15 @@ class AlpacaClient:
             params["exchange"] = exchange
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse bars from response
         bars = []
         bars_data = data.get("bars", [])
-        
+
         if isinstance(symbol_or_symbols, str):
             # Single symbol response
             for bar_data in bars_data:
@@ -785,7 +793,7 @@ class AlpacaClient:
                 bar_data_copy.pop("S", None)
                 bar_data_copy.pop("symbol", None)
                 bars.append(Bar.from_dict(symbol, bar_data_copy))
-        
+
         # Build response with metadata
         result = {
             "bars": bars,
@@ -794,18 +802,18 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(bars),
         }
-        
+
         # Add optional metadata
         if exchange:
             result["exchange"] = exchange
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_crypto_quotes(
@@ -820,7 +828,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest and historical quotes for crypto pairs (BTC/USD, ETH/USD, etc.).
-        
+
         Args:
             symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -829,7 +837,7 @@ class AlpacaClient:
             exchange: Exchange to filter by (optional)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - quotes: List of Quote objects
@@ -837,19 +845,19 @@ class AlpacaClient:
                 - exchange: Exchange filter applied (if any)
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of quotes returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_crypto_quotes("BTC/USD", limit=50)
             >>> print(f"Got {len(result['quotes'])} quotes for {result['symbol']}")
-            
+
             >>> # Multiple crypto pairs
             >>> result = client.get_crypto_quotes(["BTC/USD", "ETH/USD"], limit=100)
             >>> for quote in result['quotes']:
             ...     print(f"{quote.symbol}: Bid ${quote.bid_price}, Ask ${quote.ask_price}")
         """
         from .models import Quote
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbol_or_symbols, str):
             endpoint = f"/v1beta1/crypto/quotes/{symbol_or_symbols}"
@@ -864,7 +872,7 @@ class AlpacaClient:
                 "limit": limit,
                 "sort": sort,
             }
-        
+
         # Add optional parameters
         if start:
             params["start"] = start
@@ -874,15 +882,15 @@ class AlpacaClient:
             params["exchange"] = exchange
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse quotes from response
         quotes = []
         quotes_data = data.get("quotes", [])
-        
+
         if isinstance(symbol_or_symbols, str):
             # Single symbol response
             for quote_data in quotes_data:
@@ -896,7 +904,7 @@ class AlpacaClient:
                 quote_data_copy.pop("S", None)
                 quote_data_copy.pop("symbol", None)
                 quotes.append(Quote.from_dict(symbol, quote_data_copy))
-        
+
         # Build response with metadata
         result = {
             "quotes": quotes,
@@ -904,18 +912,18 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(quotes),
         }
-        
+
         # Add optional metadata
         if exchange:
             result["exchange"] = exchange
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
 
@@ -931,7 +939,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest and historical trades for crypto pairs (BTC/USD, ETH/USD, etc.).
-        
+
         Args:
             symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -940,7 +948,7 @@ class AlpacaClient:
             exchange: Exchange to filter by (optional)
             sort: Sort order ("asc" for ascending, "desc" for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - trades: List of Trade objects
@@ -948,19 +956,19 @@ class AlpacaClient:
                 - exchange: Exchange filter applied (if any)
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of trades returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_crypto_trades("BTC/USD", limit=50)
             >>> print(f"Got {len(result["trades"])} trades for {result["symbol"]}")
-            
+
             >>> # Multiple crypto pairs
             >>> result = client.get_crypto_trades(["BTC/USD", "ETH/USD"], limit=100)
             >>> for trade in result["trades"]:
             ...     print(f"{trade.symbol}: {trade.size} @ ${trade.price}")
         """
         from .models import Trade
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbol_or_symbols, str):
             endpoint = f"/v1beta1/crypto/trades/{symbol_or_symbols}"
@@ -975,7 +983,7 @@ class AlpacaClient:
                 "limit": limit,
                 "sort": sort,
             }
-        
+
         # Add optional parameters
         if start:
             params["start"] = start
@@ -985,15 +993,15 @@ class AlpacaClient:
             params["exchange"] = exchange
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse trades from response
         trades = []
         trades_data = data.get("trades", [])
-        
+
         if isinstance(symbol_or_symbols, str):
             # Single symbol response
             for trade_data in trades_data:
@@ -1007,7 +1015,7 @@ class AlpacaClient:
                 trade_data_copy.pop("S", None)
                 trade_data_copy.pop("symbol", None)
                 trades.append(Trade.from_dict(symbol, trade_data_copy))
-        
+
         # Build response with metadata
         result = {
             "trades": trades,
@@ -1015,18 +1023,18 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(trades),
         }
-        
+
         # Add optional metadata
         if exchange:
             result["exchange"] = exchange
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_crypto_snapshot(
@@ -1036,30 +1044,30 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for crypto pairs (BTC/USD, ETH/USD, etc.).
-        
+
         Args:
             symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
             exchange: Exchange to filter by (optional)
-            
+
         Returns:
             Dictionary containing:
                 - snapshots: List of Snapshot objects
                 - symbol: The crypto symbol(s) requested
                 - exchange: Exchange filter applied (if any)
                 - count: Number of snapshots returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_crypto_snapshot("BTC/USD")
             >>> print(f"Got snapshot for {result["symbol"]}: {result["snapshots"][0]}")
-            
+
             >>> # Multiple crypto pairs
             >>> result = client.get_crypto_snapshot(["BTC/USD", "ETH/USD"])
             >>> for snapshot in result["snapshots"]:
             ...     print(f"{snapshot.symbol}: Latest trade ${snapshot.latest_trade.price}")
         """
         from .models import Snapshot
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbol_or_symbols, str):
             endpoint = f"/v1beta1/crypto/snapshots/{symbol_or_symbols}"
@@ -1069,18 +1077,18 @@ class AlpacaClient:
             params = {
                 "symbols": ",".join(symbol_or_symbols),
             }
-        
+
         # Add optional parameters
         if exchange:
             params["exchange"] = exchange
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse snapshots from response
         snapshots = []
-        
+
         if isinstance(symbol_or_symbols, str):
             # Single symbol response
             snapshot_data = data.get("snapshot", {})
@@ -1095,18 +1103,18 @@ class AlpacaClient:
                 snapshot_data_copy.pop("S", None)
                 snapshot_data_copy.pop("symbol", None)
                 snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
-        
+
         # Build response with metadata
         result = {
             "snapshots": snapshots,
             "symbol": symbol_or_symbols,
             "count": len(snapshots),
         }
-        
+
         # Add optional metadata
         if exchange:
             result["exchange"] = exchange
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_option_quotes(
@@ -1120,7 +1128,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest and historical quotes for options symbols.
-        
+
         Args:
             symbols: Single option symbol (str) or multiple option symbols (list)
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -1128,14 +1136,14 @@ class AlpacaClient:
             limit: Maximum number of quotes to return (max 1000, default 1000)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - quotes: List of OptionQuote objects
                 - symbol: The option symbol(s) requested
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of quotes returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_option_quotes("AAPL220121C00150000", limit=100)
@@ -1146,7 +1154,7 @@ class AlpacaClient:
             ...         print(f"  Delta: {quote.greeks.delta:.3f}, IV: {quote.iv}")
         """
         from .models import OptionQuote
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v1beta1/options/quotes/{symbols}"
@@ -1161,7 +1169,7 @@ class AlpacaClient:
                 "limit": limit,
                 "sort": sort,
             }
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -1169,15 +1177,15 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse option quotes from response
         quotes = []
         quotes_data = data.get("quotes", [])
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             for quote_data in quotes_data:
@@ -1191,7 +1199,7 @@ class AlpacaClient:
                 quote_data_copy.pop("S", None)
                 quote_data_copy.pop("symbol", None)
                 quotes.append(OptionQuote.from_dict(symbol, quote_data_copy))
-        
+
         # Build response with metadata
         result = {
             "quotes": quotes,
@@ -1199,14 +1207,14 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(quotes),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_option_trades(
@@ -1220,7 +1228,7 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest and historical trades for options symbols.
-        
+
         Args:
             symbols: Single option symbol (str) or multiple option symbols (list)
             start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
@@ -1228,14 +1236,14 @@ class AlpacaClient:
             limit: Maximum number of trades to return (max 1000, default 1000)
             sort: Sort order ('asc' for ascending, 'desc' for descending)
             page_token: Pagination token for next page (if provided, other params ignored except symbols)
-            
+
         Returns:
             Dictionary containing:
                 - trades: List of OptionTrade objects
                 - symbol: The option symbol(s) requested
                 - next_page_token: Token for next page (None if no more pages)
                 - count: Number of trades returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_option_trades("AAPL220121C00150000", limit=100)
@@ -1246,7 +1254,7 @@ class AlpacaClient:
             ...         print(f"  Greeks: Δ={trade.greeks.delta:.3f}, Γ={trade.greeks.gamma:.4f}")
         """
         from .models import OptionTrade
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v1beta1/options/trades/{symbols}"
@@ -1261,7 +1269,7 @@ class AlpacaClient:
                 "limit": limit,
                 "sort": sort,
             }
-        
+
         # Add date range parameters if provided
         if start:
             params["start"] = start
@@ -1269,15 +1277,15 @@ class AlpacaClient:
             params["end"] = end
         if page_token:
             params["page_token"] = page_token
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse option trades from response
         trades = []
         trades_data = data.get("trades", [])
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             for trade_data in trades_data:
@@ -1291,7 +1299,7 @@ class AlpacaClient:
                 trade_data_copy.pop("S", None)
                 trade_data_copy.pop("symbol", None)
                 trades.append(OptionTrade.from_dict(symbol, trade_data_copy))
-        
+
         # Build response with metadata
         result = {
             "trades": trades,
@@ -1299,14 +1307,14 @@ class AlpacaClient:
             "next_page_token": data.get("next_page_token"),
             "count": len(trades),
         }
-        
+
         # Add pagination info if present
         if data.get("next_page_token"):
             result["has_next_page"] = True
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
+
         return self._apply_formatting(result, output_format)
 
     def get_option_snapshot(
@@ -1315,16 +1323,16 @@ class AlpacaClient:
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for options symbols including greeks.
-        
+
         Args:
             symbols: Single option symbol (str) or multiple option symbols (list)
-            
+
         Returns:
             Dictionary containing:
                 - snapshots: List of OptionSnapshot objects
                 - symbol: The option symbol(s) requested
                 - count: Number of snapshots returned
-                
+
         Example:
             >>> client = AlpacaClient()
             >>> result = client.get_option_snapshot("AAPL220121C00150000")
@@ -1332,7 +1340,7 @@ class AlpacaClient:
             >>> snapshot = result['snapshots'][0]
             >>> print(f"Latest trade: ${snapshot.latest_trade.price} with delta: {snapshot.greeks.delta:.3f}")
             >>> print(f"Open interest: {snapshot.open_interest}, IV: {snapshot.iv}")
-            
+
             >>> # Multiple option symbols
             >>> result = client.get_option_snapshot(["AAPL220121C00150000", "AAPL220121P00150000"])
             >>> for snapshot in result['snapshots']:
@@ -1340,7 +1348,7 @@ class AlpacaClient:
             ...     print(f"{snapshot.symbol} ({option_type}): ${snapshot.latest_quote.bid_price} - ${snapshot.latest_quote.ask_price}")
         """
         from .models import OptionSnapshot
-        
+
         # Determine API endpoint based on single or multiple symbols
         if isinstance(symbols, str):
             endpoint = f"/v1beta1/options/snapshots/{symbols}"
@@ -1350,14 +1358,14 @@ class AlpacaClient:
             params = {
                 "symbols": ",".join(symbols),
             }
-        
+
         # Make the API request
         response = self._make_request("GET", endpoint, params=params)
         data = response.json()
-        
+
         # Parse option snapshots from response
         snapshots = []
-        
+
         if isinstance(symbols, str):
             # Single symbol response
             snapshot_data = data.get("snapshot", {})
@@ -1372,34 +1380,34 @@ class AlpacaClient:
                 snapshot_data_copy.pop("S", None)
                 snapshot_data_copy.pop("symbol", None)
                 snapshots.append(OptionSnapshot.from_dict(symbol, snapshot_data_copy))
-        
+
         # Build response with metadata
         result = {
             "snapshots": snapshots,
             "symbol": symbols,
             "count": len(snapshots),
         }
-            
+
         return self._apply_formatting(result, output_format)
 
     def _apply_formatting(
-        self, 
-        data: Dict[str, Any], 
+        self,
+        data: Dict[str, Any],
         output_format: str,
         filename: Optional[str] = None
     ) -> Union[Dict[str, Any], str]:
         """Apply output formatting to API response data.
-        
+
         Args:
             data: API response data
             output_format: Output format ('dict', 'json', 'csv', 'dataframe')
             filename: Optional filename for CSV output
-            
+
         Returns:
             Formatted data (dict, string, or DataFrame)
         """
         if output_format.lower() == "dict":
             return data
-        
+
         formatter = OutputFormatter()
         return formatter.format(data, output_format.lower(), filename=filename)
