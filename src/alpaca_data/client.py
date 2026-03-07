@@ -1012,3 +1012,113 @@ class AlpacaClient:
             result["has_next_page"] = False
             
         return result
+
+
+    def get_crypto_trades(
+        self,
+        symbol_or_symbols: str | List[str],
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        limit: int = 1000,
+        exchange: Optional[str] = None,
+        sort: str = "asc",
+        page_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get latest and historical trades for crypto pairs (BTC/USD, ETH/USD, etc.).
+        
+        Args:
+            symbol_or_symbols: Single crypto symbol (e.g., "BTC/USD") or list of symbols
+            start: Start date/time in ISO format (e.g., "2024-01-01T09:30:00-05:00")
+            end: End date/time in ISO format
+            limit: Maximum number of trades to return (max 1000, default 1000)
+            exchange: Exchange to filter by (optional)
+            sort: Sort order ("asc" for ascending, "desc" for descending)
+            page_token: Pagination token for next page (if provided, other params ignored except symbols)
+            
+        Returns:
+            Dictionary containing:
+                - trades: List of Trade objects
+                - symbol: The crypto symbol(s) requested
+                - exchange: Exchange filter applied (if any)
+                - next_page_token: Token for next page (None if no more pages)
+                - count: Number of trades returned
+                
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_crypto_trades("BTC/USD", limit=50)
+            >>> print(f"Got {len(result["trades"])} trades for {result["symbol"]}")
+            
+            >>> # Multiple crypto pairs
+            >>> result = client.get_crypto_trades(["BTC/USD", "ETH/USD"], limit=100)
+            >>> for trade in result["trades"]:
+            ...     print(f"{trade.symbol}: {trade.size} @ ${trade.price}")
+        """
+        from .models import Trade
+        
+        # Determine API endpoint based on single or multiple symbols
+        if isinstance(symbol_or_symbols, str):
+            endpoint = f"/v1beta1/crypto/trades/{symbol_or_symbols}"
+            params = {
+                "limit": limit,
+                "sort": sort,
+            }
+        else:
+            endpoint = "/v1beta1/crypto/trades"
+            params = {
+                "symbols": ",".join(symbol_or_symbols),
+                "limit": limit,
+                "sort": sort,
+            }
+        
+        # Add optional parameters
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if exchange:
+            params["exchange"] = exchange
+        if page_token:
+            params["page_token"] = page_token
+        
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+        
+        # Parse trades from response
+        trades = []
+        trades_data = data.get("trades", [])
+        
+        if isinstance(symbol_or_symbols, str):
+            # Single symbol response
+            for trade_data in trades_data:
+                trades.append(Trade.from_dict(symbol_or_symbols, trade_data))
+        else:
+            # Multi-symbol response - each trade includes symbol field
+            for trade_data in trades_data:
+                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
+                # Remove symbol field from data for Trade.from_dict
+                trade_data_copy = trade_data.copy()
+                trade_data_copy.pop("S", None)
+                trade_data_copy.pop("symbol", None)
+                trades.append(Trade.from_dict(symbol, trade_data_copy))
+        
+        # Build response with metadata
+        result = {
+            "trades": trades,
+            "symbol": symbol_or_symbols,
+            "next_page_token": data.get("next_page_token"),
+            "count": len(trades),
+        }
+        
+        # Add optional metadata
+        if exchange:
+            result["exchange"] = exchange
+        
+        # Add pagination info if present
+        if data.get("next_page_token"):
+            result["has_next_page"] = True
+            result["next_page_token"] = data["next_page_token"]
+        else:
+            result["has_next_page"] = False
+            
+        return result
