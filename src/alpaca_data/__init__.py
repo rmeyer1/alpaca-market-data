@@ -23,6 +23,16 @@ from .exceptions import (
     AlpacaValidationError,
 )
 from .models import Bar, Quote, Trade, Snapshot, News
+from .formatters import (
+    OutputFormatter,
+    JSONFormatter,
+    CSVFormatter,
+    DataFrameFormatter,
+    format_output,
+    to_json,
+    to_csv,
+    to_dataframe,
+)
 
 __all__ = [
     "AlpacaClient",
@@ -38,4 +48,12 @@ __all__ = [
     "Trade",
     "Snapshot",
     "News",
+    "OutputFormatter",
+    "JSONFormatter",
+    "CSVFormatter",
+    "DataFrameFormatter",
+    "format_output",
+    "to_json",
+    "to_csv",
+    "to_dataframe",
 ]

@@ -3,7 +3,7 @@
 import os
 import requests
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from .rate_limiter import RateLimiter
 from .exceptions import (
     AlpacaAPIError,
@@ -12,6 +12,8 @@ from .exceptions import (
     AlpacaValidationError,
     AlpacaRateLimitError
 )
+from .formatters import OutputFormatter
+from .formatters import OutputFormatter
 
 
 class AlpacaClient:
@@ -198,7 +200,8 @@ class AlpacaClient:
         adjustment: str = "all",
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get historical OHLCV bars for one or more symbols.
         
         Args:
@@ -295,8 +298,13 @@ class AlpacaClient:
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
-        return result
+        
+        # Apply output formatting if requested
+        if output_format.lower() != "dict":
+            formatter = OutputFormatter()
+            return formatter.format(result, output_format.lower())
+        
+        return self._apply_formatting(result, output_format)
 
     def get_quotes(
         self,
@@ -307,7 +315,8 @@ class AlpacaClient:
         feed: str = "iex",
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get latest and historical NBBO quotes for one or more symbols.
         
         Args:
@@ -399,14 +408,16 @@ class AlpacaClient:
             result["next_page_token"] = data["next_page_token"]
         else:
             result["has_next_page"] = False
-            
-        return result
+        
+        # Apply output formatting if requested
+        return self._apply_formatting(result, output_format)
 
     def get_snapshot(
         self,
         symbols: str | List[str],
         feed: str = "iex",
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for one or more symbols.
         
         Args:
@@ -475,7 +486,7 @@ class AlpacaClient:
             "count": len(snapshots),
         }
             
-        return result
+        return self._apply_formatting(result, output_format)
 
     def get_trades(
         self,
@@ -486,7 +497,8 @@ class AlpacaClient:
         feed: str = "iex",
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get historical trades for one or more symbols.
         
         Args:
@@ -581,7 +593,7 @@ class AlpacaClient:
         else:
             result["has_next_page"] = False
             
-        return result
+        return self._apply_formatting(result, output_format)
 
     def get_news(
         self,
@@ -592,7 +604,8 @@ class AlpacaClient:
         include_content: bool = False,
         sort: str = "desc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get news articles for specified symbols and date range.
         
         Args:
@@ -677,7 +690,7 @@ class AlpacaClient:
         if end:
             result["end"] = end
             
-        return result
+        return self._apply_formatting(result, output_format)
 
     def get_crypto_bars(
         self,
@@ -689,7 +702,8 @@ class AlpacaClient:
         exchange: Optional[str] = None,
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get historical OHLCV bars for crypto pairs (BTC/USD, ETH/USD, etc.).
         
         Args:
@@ -792,7 +806,7 @@ class AlpacaClient:
         else:
             result["has_next_page"] = False
             
-        return result
+        return self._apply_formatting(result, output_format)
 
     def get_crypto_quotes(
         self,
@@ -803,7 +817,8 @@ class AlpacaClient:
         exchange: Optional[str] = None,
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get latest and historical quotes for crypto pairs (BTC/USD, ETH/USD, etc.).
         
         Args:
@@ -901,7 +916,7 @@ class AlpacaClient:
         else:
             result["has_next_page"] = False
             
-        return result
+        return self._apply_formatting(result, output_format)
 
 
     def get_crypto_trades(
@@ -913,7 +928,8 @@ class AlpacaClient:
         exchange: Optional[str] = None,
         sort: str = "asc",
         page_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get latest and historical trades for crypto pairs (BTC/USD, ETH/USD, etc.).
         
         Args:
@@ -1011,13 +1027,14 @@ class AlpacaClient:
         else:
             result["has_next_page"] = False
             
-        return result
+        return self._apply_formatting(result, output_format)
 
     def get_crypto_snapshot(
         self,
         symbol_or_symbols: str | List[str],
         exchange: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for crypto pairs (BTC/USD, ETH/USD, etc.).
         
         Args:
@@ -1090,4 +1107,26 @@ class AlpacaClient:
         if exchange:
             result["exchange"] = exchange
             
-        return result
+        return self._apply_formatting(result, output_format)
+
+    def _apply_formatting(
+        self, 
+        data: Dict[str, Any], 
+        output_format: str,
+        filename: Optional[str] = None
+    ) -> Union[Dict[str, Any], str]:
+        """Apply output formatting to API response data.
+        
+        Args:
+            data: API response data
+            output_format: Output format ('dict', 'json', 'csv', 'dataframe')
+            filename: Optional filename for CSV output
+            
+        Returns:
+            Formatted data (dict, string, or DataFrame)
+        """
+        if output_format.lower() == "dict":
+            return data
+        
+        formatter = OutputFormatter()
+        return formatter.format(data, output_format.lower(), filename=filename)
