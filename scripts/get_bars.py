@@ -1,201 +1,136 @@
-#!/usr/bin/env python3
-"""CLI script to fetch historical OHLCV bars."""
+"""CLI script for getting historical OHLCV bars from Alpaca Market Data API."""
 
-import argparse
-import os
-import sys
-from datetime import datetime, timedelta
+import typer
+from typing import List, Optional
 
-# Import SDK modules
-try:
-    from alpaca_data import AlpacaClient
-    from alpaca_data.exceptions import (
-        AlpacaAuthError,
-        AlpacaNotFoundError,
-        AlpacaRateLimitError,
-        AlpacaAPIError,
-    )
-except ImportError as e:
-    print(f"Error importing Alpaca SDK: {e}", file=sys.stderr)
-    print("Make sure the package is installed: pip install -e .", file=sys.stderr)
-    sys.exit(1)
+app = typer.Typer(
+    name="alpaca-bars",
+    help="Get historical OHLCV bars for stocks from Alpaca Market Data API"
+)
 
 
-def main():
-    """Main entry point for get_bars CLI."""
-    parser = argparse.ArgumentParser(
-        description="Fetch historical OHLCV bars from Alpaca Market Data API"
-    )
-    parser.add_argument(
-        "symbols",
-        nargs="+",
-        help="Stock or crypto symbols (e.g., AAPL MSFT BTC/USD)",
-    )
-    parser.add_argument(
-        "--timeframe",
-        default="1Day",
-        choices=["1Min", "5Min", "15Min", "1Hour", "1Day", "1Week", "1Month"],
-        help="Bar timeframe (default: 1Day)",
-    )
-    parser.add_argument(
-        "--start",
-        type=str,
-        help="Start date (YYYY-MM-DD or ISO 8601)",
-    )
-    parser.add_argument(
-        "--end",
-        type=str,
-        help="End date (YYYY-MM-DD or ISO 8601, defaults to now)",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=100,
-        help="Maximum number of bars to fetch (default: 100)",
-    )
-    parser.add_argument(
-        "--feed",
-        default="iex",
-        choices=["iex", "sip"],
-        help="Data feed (iex for free tier, sip requires subscription)",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default="json",
-        choices=["json", "csv"],
-        help="Output format (default: json)",
-    )
-    parser.add_argument(
-        "--output-file",
-        "-f",
-        type=str,
-        help="Output file path (default: stdout)",
-    )
-
-    args = parser.parse_args()
-
-    # Load environment variables
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    # Check for API credentials
-    if not os.getenv("ALPACA_API_KEY") or not os.getenv("ALPACA_SECRET_KEY"):
-        print(
-            "Error: ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables required",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
+@app.command()
+def bars(
+    symbols: List[str] = typer.Argument(..., help="Stock symbols to get bars for (e.g., AAPL GOOGL)"),
+    timeframe: str = typer.Option("1Day", "--timeframe", "-t", help="Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)"),
+    start: Optional[str] = typer.Option(None, "--start", "-s", help="Start date/time in ISO format (e.g., 2024-01-01T09:30:00-05:00)"),
+    end: Optional[str] = typer.Option(None, "--end", "-e", help="End date/time in ISO format"),
+    limit: int = typer.Option(1000, "--limit", "-l", help="Maximum number of bars to return (max 1000, default 1000)"),
+    adjustment: str = typer.Option("all", "--adjustment", "-a", help="Split adjustment (all, raw, splits_only, dividends_only)"),
+    sort: str = typer.Option("asc", "--sort", help="Sort order (asc for ascending, desc for descending)"),
+    format: str = typer.Option("dict", "--format", "-f", help="Output format (dict, json, csv, dataframe)"),
+    output_file: Optional[str] = typer.Option(None, "--output-file", "-o", help="Output file path for CSV format"),
+    feed: str = typer.Option("iex", "--feed", help="Data feed (iex for free tier, sip for premium)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+):
+    """Get historical OHLCV bars for one or more stock symbols.
+    
+    Examples:
+        alpaca-bars AAPL
+        alpaca-bars AAPL GOOGL --timeframe 1Hour --start 2024-01-01
+        alpaca-bars AAPL --format json --output-file bars.json
+        alpaca-bars AAPL --format csv --output-file bars.csv
+        alpaca-bars AAPL --format dataframe
+    """
     try:
+        # Import here to allow for proper mocking in tests
+        from src.alpaca_data import AlpacaClient
+        from src.alpaca_data.formatters import format_output
+        
         # Initialize client
         client = AlpacaClient()
         
-        print(f"Testing connection to Alpaca API...")
-        if not client.test_connection():
-            print("Error: Failed to connect to Alpaca API. Check your credentials.", file=sys.stderr)
-            sys.exit(1)
+        if verbose:
+            typer.echo(f"Getting bars for symbols: {symbols}")
+            typer.echo(f"Timeframe: {timeframe}")
+            typer.echo(f"Format: {format}")
             
-        print("✅ Connected successfully!")
+            if start:
+                typer.echo(f"Start: {start}")
+            if end:
+                typer.echo(f"End: {end}")
         
-        # Prepare parameters
-        params = {
-            'symbols': args.symbols,
-            'timeframe': args.timeframe,
-            'limit': args.limit,
-        }
+        # Get bars from API
+        result = client.get_bars(
+            symbols=symbols,
+            timeframe=timeframe,
+            start=start,
+            end=end,
+            limit=limit,
+            adjustment=adjustment,
+            sort=sort,
+            feed=feed,
+            output_format=format.lower()
+        )
         
-        # Add optional parameters
-        if args.start:
-            params['start'] = args.start
-        if args.end:
-            params['end'] = args.end
-            
-        print(f"📊 Fetching {args.timeframe} bars for: {', '.join(args.symbols)}")
-        
-        # Make the API call
-        result = client.get_bars(**params)
-        
-        # Display results
-        print(f"✅ Retrieved {result['count']} bars")
-        
-        # Convert bars to output format
-        if args.output == "json":
-            if args.output_file:
-                import json
-                with open(args.output_file, 'w') as f:
-                    json.dump(result, f, default=str, indent=2)
-                print(f"💾 Saved to {args.output_file}")
+        # Handle different output formats
+        if format.lower() == "dict":
+            # Print dictionary output in a readable format
+            print_bars_dict(result, verbose)
+        elif format.lower() == "json":
+            # JSON is already formatted as string
+            typer.echo(result)
+        elif format.lower() == "csv":
+            # CSV output
+            if output_file:
+                # If output file specified, write to file
+                typer.echo(f"Writing CSV to {output_file}", err=True)
+                import os
+                os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else ".", exist_ok=True)
+                with open(output_file, "w") as f:
+                    f.write(result)
+                typer.echo(f"✅ CSV written to {output_file}")
             else:
-                import json
-                print(json.dumps(result, default=str, indent=2))
-        
-        elif args.output == "csv":
-            if not result['bars']:
-                print("No bars to export")
-                return
-                
-            import csv
-            import io
-            
-            # Create CSV content
-            output = io.StringIO()
-            writer = csv.writer(output)
-            
-            # Write header
-            first_bar = result['bars'][0]
-            writer.writerow(['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap'])
-            
-            # Write bar data
-            for bar in result['bars']:
-                writer.writerow([
-                    bar.symbol,
-                    bar.timestamp,
-                    bar.open,
-                    bar.high,
-                    bar.low,
-                    bar.close,
-                    bar.volume,
-                    bar.trade_count or '',
-                    bar.vwap or ''
-                ])
-            
-            # Output CSV
-            if args.output_file:
-                with open(args.output_file, 'w') as f:
-                    f.write(output.getvalue())
-                print(f"💾 Saved to {args.output_file}")
+                # Print to stdout
+                typer.echo(result)
+        elif format.lower() == "dataframe":
+            # DataFrame output
+            import pandas as pd
+            if isinstance(result, pd.DataFrame):
+                typer.echo(result.to_string())
             else:
-                print("📄 CSV Output:")
-                print(output.getvalue())
-        
-        # Show pagination info if available
-        if result.get('has_next_page'):
-            print(f"📖 More pages available. Next page token: {result['next_page_token']}")
-        
-    except AlpacaAuthError as e:
-        print(f"Authentication Error: {e}", file=sys.stderr)
-        print("Check your API credentials in .env file", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaRateLimitError as e:
-        print(f"Rate Limit Error: {e}", file=sys.stderr)
-        if e.retry_after:
-            print(f"Retry after: {e.retry_after} seconds", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaNotFoundError as e:
-        print(f"Not Found Error: {e}", file=sys.stderr)
-        print("Check that your symbols are valid", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaAPIError as e:
-        print(f"API Error: {e}", file=sys.stderr)
-        if e.status_code:
-            print(f"HTTP Status: {e.status_code}", file=sys.stderr)
-        sys.exit(1)
+                typer.echo("❌ Error: DataFrame format requires pandas to be installed")
+                raise typer.Exit(1)
+        else:
+            typer.echo(f"❌ Error: Unsupported format '{format}'. Supported formats: dict, json, csv, dataframe")
+            raise typer.Exit(1)
+            
     except Exception as e:
-        print(f"Unexpected Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        typer.echo(f"❌ Error: {str(e)}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
+
+
+def print_bars_dict(result: dict, verbose: bool = False):
+    """Print bars dictionary in a readable format."""
+    if not verbose:
+        # Simple summary
+        typer.echo(f"📊 Got {result.get('count', 0)} bars for {result.get('symbol', 'unknown')}")
+        typer.echo(f"Timeframe: {result.get('timeframe', 'unknown')}")
+        
+        if result.get('has_next_page'):
+            typer.echo(f"⚠️  More data available (pagination required)")
+            
+        # Show first few bars if available
+        bars = result.get('bars', [])
+        if bars and len(bars) > 0:
+            typer.echo(f"\nLatest bars:")
+            for i, bar in enumerate(bars[-3:] if len(bars) >= 3 else bars):
+                # Handle both Bar objects and dictionaries
+                if hasattr(bar, 'symbol'):
+                    # Bar object
+                    typer.echo(f"  {i+1}. {bar.symbol} | {bar.timestamp} | O:{bar.open} H:{bar.high} L:{bar.low} C:{bar.close} V:{bar.volume}")
+                else:
+                    # Dictionary format
+                    typer.echo(f"  {i+1}. {bar.get('symbol', 'unknown')} | {bar.get('timestamp', 'unknown')} | O:{bar.get('open', 'N/A')} H:{bar.get('high', 'N/A')} L:{bar.get('low', 'N/A')} C:{bar.get('close', 'N/A')} V:{bar.get('volume', 'N/A')}")
+        
+    else:
+        # Verbose output - show all data
+        import json
+        typer.echo(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":
-    main()
+    app()

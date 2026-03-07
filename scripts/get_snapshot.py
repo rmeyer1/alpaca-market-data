@@ -1,176 +1,166 @@
-#!/usr/bin/env python3
-"""CLI script to fetch market snapshots."""
+"""CLI script for getting market snapshots from Alpaca Market Data API."""
 
-import argparse
-import os
-import sys
+import typer
+from typing import List, Optional
 
-# Import SDK modules
-try:
-    from alpaca_data import AlpacaClient
-    from alpaca_data.exceptions import (
-        AlpacaAuthError,
-        AlpacaNotFoundError,
-        AlpacaRateLimitError,
-        AlpacaAPIError,
-    )
-except ImportError as e:
-    print(f"Error importing Alpaca SDK: {e}", file=sys.stderr)
-    print("Make sure the package is installed: pip install -e .", file=sys.stderr)
-    sys.exit(1)
+app = typer.Typer(
+    name="alpaca-snapshot",
+    help="Get market snapshots for stocks from Alpaca Market Data API"
+)
 
 
-def main():
-    """Main entry point for get_snapshot CLI."""
-    parser = argparse.ArgumentParser(
-        description="Fetch market snapshots from Alpaca Market Data API"
-    )
-    parser.add_argument(
-        "symbols",
-        nargs="+",
-        help="Stock symbols (e.g., AAPL MSFT)",
-    )
-    parser.add_argument(
-        "--feed",
-        default="iex",
-        choices=["iex", "sip"],
-        help="Data feed",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default="json",
-        choices=["json", "csv"],
-        help="Output format",
-    )
-    parser.add_argument(
-        "--output-file",
-        "-f",
-        type=str,
-        help="Output file path",
-    )
-
-    args = parser.parse_args()
-
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    if not os.getenv("ALPACA_API_KEY") or not os.getenv("ALPACA_SECRET_KEY"):
-        print("Error: API credentials required", file=sys.stderr)
-        sys.exit(1)
-
+@app.command()
+def snapshot(
+    symbols: List[str] = typer.Argument(..., help="Stock symbols to get snapshots for (e.g., AAPL GOOGL)"),
+    format: str = typer.Option("dict", "--format", "-f", help="Output format (dict, json, csv, dataframe)"),
+    output_file: Optional[str] = typer.Option(None, "--output-file", "-o", help="Output file path for CSV format"),
+    feed: str = typer.Option("iex", "--feed", help="Data feed (iex for free tier, sip for premium)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+):
+    """Get market snapshots for one or more stock symbols.
+    
+    Examples:
+        alpaca-snapshot AAPL
+        alpaca-snapshot AAPL GOOGL MSFT
+        alpaca-snapshot AAPL --format json --output-file snapshot.json
+        alpaca-snapshot AAPL --format csv --output-file snapshot.csv
+        alpaca-snapshot AAPL --format dataframe
+    """
     try:
+        # Import here to allow for proper mocking in tests
+        from src.alpaca_data import AlpacaClient
+        from src.alpaca_data.formatters import format_output
+        
         # Initialize client
         client = AlpacaClient()
         
-        print(f"Testing connection to Alpaca API...")
-        if not client.test_connection():
-            print("Error: Failed to connect to Alpaca API. Check your credentials.", file=sys.stderr)
-            sys.exit(1)
-            
-        print("✅ Connected successfully!")
+        if verbose:
+            typer.echo(f"Getting snapshots for symbols: {symbols}")
+            typer.echo(f"Format: {format}")
+            typer.echo(f"Feed: {feed}")
         
-        # Fetch snapshots
-        print(f"Fetching snapshots for: {', '.join(args.symbols)}")
-        result = client.get_snapshot(args.symbols, feed=args.feed)
+        # Get snapshots from API
+        result = client.get_snapshot(
+            symbols=symbols,
+            feed=feed,
+            output_format=format.lower()
+        )
         
-        # Format output
-        if args.output == "json":
-            import json
-            output_data = {
-                "symbol": result["symbol"],
-                "feed": result["feed"],
-                "count": result["count"],
-                "snapshots": []
-            }
-            
-            for snapshot in result["snapshots"]:
-                snapshot_dict = {"symbol": snapshot.symbol}
-                
-                if snapshot.latest_trade:
-                    snapshot_dict["latest_trade"] = {
-                        "timestamp": snapshot.latest_trade.timestamp.isoformat(),
-                        "price": snapshot.latest_trade.price,
-                        "size": snapshot.latest_trade.size,
-                        "exchange": snapshot.latest_trade.exchange
-                    }
-                
-                if snapshot.latest_quote:
-                    snapshot_dict["latest_quote"] = {
-                        "timestamp": snapshot.latest_quote.timestamp.isoformat(),
-                        "ask_price": snapshot.latest_quote.ask_price,
-                        "bid_price": snapshot.latest_quote.bid_price,
-                        "ask_size": snapshot.latest_quote.ask_size,
-                        "bid_size": snapshot.latest_quote.bid_size
-                    }
-                
-                if snapshot.minute_bar:
-                    snapshot_dict["minute_bar"] = {
-                        "timestamp": snapshot.minute_bar.timestamp.isoformat(),
-                        "open": snapshot.minute_bar.open,
-                        "high": snapshot.minute_bar.high,
-                        "low": snapshot.minute_bar.low,
-                        "close": snapshot.minute_bar.close,
-                        "volume": snapshot.minute_bar.volume
-                    }
-                
-                if snapshot.daily_bar:
-                    snapshot_dict["daily_bar"] = {
-                        "timestamp": snapshot.daily_bar.timestamp.isoformat(),
-                        "open": snapshot.daily_bar.open,
-                        "high": snapshot.daily_bar.high,
-                        "low": snapshot.daily_bar.low,
-                        "close": snapshot.daily_bar.close,
-                        "volume": snapshot.daily_bar.volume
-                    }
-                
-                output_data["snapshots"].append(snapshot_dict)
-            
-            if args.output_file:
-                with open(args.output_file, 'w') as f:
-                    json.dump(output_data, f, indent=2)
-                print(f"✅ Results saved to {args.output_file}")
+        # Handle different output formats
+        if format.lower() == "dict":
+            # Print dictionary output in a readable format
+            print_snapshot_dict(result, verbose)
+        elif format.lower() == "json":
+            # JSON is already formatted as string
+            typer.echo(result)
+        elif format.lower() == "csv":
+            # CSV output
+            if output_file:
+                # If output file specified, write to file
+                typer.echo(f"Writing CSV to {output_file}", err=True)
+                import os
+                os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else ".", exist_ok=True)
+                with open(output_file, "w") as f:
+                    f.write(result)
+                typer.echo(f"✅ CSV written to {output_file}")
             else:
-                print(json.dumps(output_data, indent=2))
-        
+                # Print to stdout
+                typer.echo(result)
+        elif format.lower() == "dataframe":
+            # DataFrame output
+            import pandas as pd
+            if isinstance(result, pd.DataFrame):
+                typer.echo(result.to_string())
+            else:
+                typer.echo("❌ Error: DataFrame format requires pandas to be installed")
+                raise typer.Exit(1)
         else:
-            # CSV format
-            print("Symbol,Latest Trade Price,Latest Trade Size,Ask Price,Bid Price,Minute Bar Close,Daily Bar Close")
-            for snapshot in result["snapshots"]:
-                trade_price = snapshot.latest_trade.price if snapshot.latest_trade else "N/A"
-                trade_size = snapshot.latest_trade.size if snapshot.latest_trade else "N/A"
-                ask_price = snapshot.latest_quote.ask_price if snapshot.latest_quote else "N/A"
-                bid_price = snapshot.latest_quote.bid_price if snapshot.latest_quote else "N/A"
-                minute_close = snapshot.minute_bar.close if snapshot.minute_bar else "N/A"
-                daily_close = snapshot.daily_bar.close if snapshot.daily_bar else "N/A"
-                
-                print(f"{snapshot.symbol},{trade_price},{trade_size},{ask_price},{bid_price},{minute_close},{daily_close}")
-        
-        print(f"\n✅ Retrieved {result['count']} snapshot(s) using {args.feed} feed")
-        
-    except AlpacaAuthError as e:
-        print(f"Authentication Error: {e}", file=sys.stderr)
-        print("Check your API credentials in .env file", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaRateLimitError as e:
-        print(f"Rate Limit Error: {e}", file=sys.stderr)
-        if e.retry_after:
-            print(f"Retry after: {e.retry_after} seconds", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaNotFoundError as e:
-        print(f"Not Found Error: {e}", file=sys.stderr)
-        print("Check that your symbols are valid", file=sys.stderr)
-        sys.exit(1)
-    except AlpacaAPIError as e:
-        print(f"API Error: {e}", file=sys.stderr)
-        if e.status_code:
-            print(f"HTTP Status: {e.status_code}", file=sys.stderr)
-        sys.exit(1)
+            typer.echo(f"❌ Error: Unsupported format '{format}'. Supported formats: dict, json, csv, dataframe")
+            raise typer.Exit(1)
+            
     except Exception as e:
-        print(f"Unexpected Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        typer.echo(f"❌ Error: {str(e)}", err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(1)
+
+
+def print_snapshot_dict(result: dict, verbose: bool = False):
+    """Print snapshots dictionary in a readable format."""
+    if not verbose:
+        # Simple summary
+        typer.echo(f"📊 Got {result.get('count', 0)} snapshots")
+        typer.echo(f"Symbols: {', '.join(result.get('symbol', [])) if isinstance(result.get('symbol'), list) else result.get('symbol', 'unknown')}")
+        
+        # Show snapshots if available
+        snapshots = result.get('snapshots', [])
+        if snapshots and len(snapshots) > 0:
+            typer.echo(f"\nMarket snapshots:")
+            for i, snapshot in enumerate(snapshots):
+                # Handle both Snapshot objects and dictionaries
+                if hasattr(snapshot, 'symbol'):
+                    # Snapshot object
+                    symbol = snapshot.symbol
+                    
+                    # Show latest trade if available
+                    if snapshot.latest_trade:
+                        trade = snapshot.latest_trade
+                        typer.echo(f"  {i+1}. {symbol} | Trade: ${trade.price} x {trade.size} @ {trade.timestamp}")
+                    else:
+                        typer.echo(f"  {i+1}. {symbol} | No recent trades")
+                    
+                    # Show latest quote if available
+                    if snapshot.latest_quote:
+                        quote = snapshot.latest_quote
+                        typer.echo(f"     Quote: Bid ${quote.bid_price}@{quote.bid_size} | Ask ${quote.ask_price}@{quote.ask_size}")
+                    
+                    # Show daily bar if available
+                    if snapshot.daily_bar:
+                        bar = snapshot.daily_bar
+                        typer.echo(f"     Daily: O:${bar.open} H:${bar.high} L:${bar.low} C:${bar.close} V:{bar.volume}")
+                else:
+                    # Dictionary format
+                    symbol = snapshot.get('symbol', 'unknown')
+                    
+                    # Show latest trade if available
+                    latest_trade = snapshot.get('latest_trade')
+                    if latest_trade:
+                        if hasattr(latest_trade, 'price'):
+                            # Trade object
+                            typer.echo(f"  {i+1}. {symbol} | Trade: ${latest_trade.price} x {latest_trade.size} @ {latest_trade.timestamp}")
+                        else:
+                            # Dictionary
+                            typer.echo(f"  {i+1}. {symbol} | Trade: ${latest_trade.get('price', 'N/A')} x {latest_trade.get('size', 'N/A')} @ {latest_trade.get('timestamp', 'N/A')}")
+                    else:
+                        typer.echo(f"  {i+1}. {symbol} | No recent trades")
+                    
+                    # Show latest quote if available
+                    latest_quote = snapshot.get('latest_quote')
+                    if latest_quote:
+                        if hasattr(latest_quote, 'bid_price'):
+                            # Quote object
+                            typer.echo(f"     Quote: Bid ${latest_quote.bid_price}@{latest_quote.bid_size} | Ask ${latest_quote.ask_price}@{latest_quote.ask_size}")
+                        else:
+                            # Dictionary
+                            typer.echo(f"     Quote: Bid ${latest_quote.get('bid_price', 'N/A')}@{latest_quote.get('bid_size', 'N/A')} | Ask ${latest_quote.get('ask_price', 'N/A')}@{latest_quote.get('ask_size', 'N/A')}")
+                    
+                    # Show daily bar if available
+                    daily_bar = snapshot.get('daily_bar')
+                    if daily_bar:
+                        if hasattr(daily_bar, 'open'):
+                            # Bar object
+                            typer.echo(f"     Daily: O:${daily_bar.open} H:${daily_bar.high} L:${daily_bar.low} C:${daily_bar.close} V:{daily_bar.volume}")
+                        else:
+                            # Dictionary
+                            typer.echo(f"     Daily: O:${daily_bar.get('open', 'N/A')} H:${daily_bar.get('high', 'N/A')} L:${daily_bar.get('low', 'N/A')} C:${daily_bar.get('close', 'N/A')} V:{daily_bar.get('volume', 'N/A')}")
+                typer.echo()
+        
+    else:
+        # Verbose output - show all data
+        import json
+        typer.echo(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":
-    main()
+    app()
