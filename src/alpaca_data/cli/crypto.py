@@ -32,8 +32,8 @@ def bars(
     """
     try:
         # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        from src.alpaca_data.formatters import format_output
+        from alpaca_data import AlpacaClient
+        from alpaca_data.formatters import format_output
         
         # Initialize client
         client = AlpacaClient()
@@ -95,8 +95,8 @@ def quotes(
     """
     try:
         # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        from src.alpaca_data.formatters import format_output
+        from alpaca_data import AlpacaClient
+        from alpaca_data.formatters import format_output
         
         # Initialize client
         client = AlpacaClient()
@@ -152,8 +152,8 @@ def snapshot(
     """
     try:
         # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        from src.alpaca_data.formatters import format_output
+        from alpaca_data import AlpacaClient
+        from alpaca_data.formatters import format_output
         
         # Initialize client
         client = AlpacaClient()
@@ -320,5 +320,6 @@ def _print_crypto_dict(result: dict, verbose: bool = False, data_type: str = "")
         typer.echo(json.dumps(result, indent=2, default=str))
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for CLI commands."""
     app()

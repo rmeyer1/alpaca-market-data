@@ -28,8 +28,8 @@ def snapshot(
     """
     try:
         # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        from src.alpaca_data.formatters import format_output
+        from alpaca_data import AlpacaClient
+        from alpaca_data.formatters import format_output
         
         # Initialize client
         client = AlpacaClient()
@@ -162,5 +162,6 @@ def print_snapshot_dict(result: dict, verbose: bool = False):
         typer.echo(json.dumps(result, indent=2, default=str))
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for CLI commands."""
     app()

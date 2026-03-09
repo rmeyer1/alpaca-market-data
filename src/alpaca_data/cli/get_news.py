@@ -2,6 +2,7 @@
 
 import typer
 from typing import List, Optional
+from .. import AlpacaClient
 
 app = typer.Typer(
     name="alpaca-news",
@@ -32,9 +33,6 @@ def news(
         alpaca-news --start 2024-01-01 --end 2024-01-31
     """
     try:
-        # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        
         # Initialize client
         client = AlpacaClient()
         
@@ -146,5 +144,10 @@ def print_news_dict(result: dict, verbose: bool = False):
         typer.echo(json.dumps(result, indent=2, default=str))
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for CLI commands."""
     app()
+
+
+if __name__ == "__main__":
+    main()
