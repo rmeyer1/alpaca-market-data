@@ -244,7 +244,7 @@ class AlpacaClient:
 
     def get_bars(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         timeframe: str = "1Day",
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -368,7 +368,7 @@ class AlpacaClient:
 
     def get_quotes(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -474,7 +474,7 @@ class AlpacaClient:
 
     def get_snapshot(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         feed: str = "iex",
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
@@ -550,7 +550,7 @@ class AlpacaClient:
 
     def get_trades(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -754,7 +754,7 @@ class AlpacaClient:
 
     def get_crypto_bars(
         self,
-        symbol_or_symbols: str | List[str],
+        symbol_or_symbols: Union[str, List[str]],
         timeframe: str = "1Day",
         start: Optional[str] = None,
         end: Optional[str] = None,
@@ -870,7 +870,7 @@ class AlpacaClient:
 
     def get_crypto_quotes(
         self,
-        symbol_or_symbols: str | List[str],
+        symbol_or_symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -981,7 +981,7 @@ class AlpacaClient:
 
     def get_crypto_trades(
         self,
-        symbol_or_symbols: str | List[str],
+        symbol_or_symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -1091,7 +1091,7 @@ class AlpacaClient:
 
     def get_crypto_snapshot(
         self,
-        symbol_or_symbols: str | List[str],
+        symbol_or_symbols: Union[str, List[str]],
         exchange: Optional[str] = None,
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
@@ -1171,7 +1171,7 @@ class AlpacaClient:
 
     def get_option_quotes(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -1271,7 +1271,7 @@ class AlpacaClient:
 
     def get_option_trades(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         start: Optional[str] = None,
         end: Optional[str] = None,
         limit: int = 1000,
@@ -1371,7 +1371,7 @@ class AlpacaClient:
 
     def get_option_snapshot(
         self,
-        symbols: str | List[str],
+        symbols: Union[str, List[str]],
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get latest market data snapshot for options symbols including greeks.
