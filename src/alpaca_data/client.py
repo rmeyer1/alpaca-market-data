@@ -4,6 +4,7 @@ import os
 import requests
 import time
 from typing import Optional, Dict, Any, List, Union
+from dotenv import load_dotenv
 from .rate_limiter import RateLimiter
 from .exceptions import (
     AlpacaAPIError,
@@ -14,6 +15,9 @@ from .exceptions import (
 )
 from .formatters import OutputFormatter
 from .formatters import OutputFormatter
+
+# Load environment variables from .env file automatically
+load_dotenv()
 
 
 class AlpacaClient:

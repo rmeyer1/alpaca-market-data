@@ -82,7 +82,7 @@ class Bar:
                 close=float(data["c"]),
                 volume=float(data["v"]),
                 trade_count=data.get("n"),
-                vwap=data.get("vwap") or data.get("vw"),
+                vwap=data.get("vw") or data.get("vwap"),
             )
         except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid data format in API response: {e}")
