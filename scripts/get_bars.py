@@ -20,7 +20,7 @@ def bars(
     sort: str = typer.Option("asc", "--sort", help="Sort order (asc for ascending, desc for descending)"),
     format: str = typer.Option("dict", "--format", "-f", help="Output format (dict, json, csv, dataframe)"),
     output_file: Optional[str] = typer.Option(None, "--output-file", "-o", help="Output file path for CSV format"),
-    feed: str = typer.Option("iex", "--feed", help="Data feed (iex for free tier, sip for premium)"),
+
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ):
     """Get historical OHLCV bars for one or more stock symbols.
@@ -59,7 +59,6 @@ def bars(
             limit=limit,
             adjustment=adjustment,
             sort=sort,
-            feed=feed,
             output_format=format.lower()
         )
         
