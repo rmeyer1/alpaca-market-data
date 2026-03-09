@@ -4,6 +4,7 @@ import os
 import requests
 import time
 from typing import Optional, Dict, Any, List, Union
+from urllib.parse import urljoin
 from dotenv import load_dotenv
 from .rate_limiter import RateLimiter
 from .exceptions import (
@@ -97,7 +98,7 @@ class AlpacaClient:
             requests.HTTPError: For HTTP error status codes
             requests.ConnectionError: For network-related errors
         """
-        url = f"{self.base_url}{endpoint}"
+        url = urljoin(self.base_url, endpoint)
         headers = self._get_headers()
 
         # Apply rate limiting - acquire token before making request
