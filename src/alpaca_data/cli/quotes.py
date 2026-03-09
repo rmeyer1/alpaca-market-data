@@ -1,63 +1,60 @@
-"""CLI script for getting historical OHLCV bars from Alpaca Market Data API."""
+"""CLI script for getting quotes from Alpaca Market Data API."""
 
 import typer
 from typing import List, Optional
 
 app = typer.Typer(
-    name="alpaca-bars",
-    help="Get historical OHLCV bars for stocks from Alpaca Market Data API"
+    name="alpaca-quotes",
+    help="Get NBBO quotes for stocks from Alpaca Market Data API"
 )
 
 
 @app.command()
-def bars(
-    symbols: List[str] = typer.Argument(..., help="Stock symbols to get bars for (e.g., AAPL GOOGL)"),
-    timeframe: str = typer.Option("1Day", "--timeframe", "-t", help="Bar timeframe (1Min, 5Min, 15Min, 1Hour, 1Day, 1Week, 1Month)"),
+def quotes(
+    symbols: List[str] = typer.Argument(..., help="Stock symbols to get quotes for (e.g., AAPL GOOGL)"),
     start: Optional[str] = typer.Option(None, "--start", "-s", help="Start date/time in ISO format (e.g., 2024-01-01T09:30:00-05:00)"),
     end: Optional[str] = typer.Option(None, "--end", "-e", help="End date/time in ISO format"),
-    limit: int = typer.Option(1000, "--limit", "-l", help="Maximum number of bars to return (max 1000, default 1000)"),
-    adjustment: str = typer.Option("all", "--adjustment", "-a", help="Split adjustment (all, raw, splits_only, dividends_only)"),
-    sort: str = typer.Option("asc", "--sort", help="Sort order (asc for ascending, desc for descending)"),
+    limit: int = typer.Option(1000, "--limit", "-l", help="Maximum number of quotes to return (max 1000, default 1000)"),
     format: str = typer.Option("dict", "--format", "-f", help="Output format (dict, json, csv, dataframe)"),
     output_file: Optional[str] = typer.Option(None, "--output-file", "-o", help="Output file path for CSV format"),
-
+    feed: str = typer.Option("iex", "--feed", help="Data feed (iex for free tier, sip for premium)"),
+    sort: str = typer.Option("asc", "--sort", help="Sort order (asc for ascending, desc for descending)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
 ):
-    """Get historical OHLCV bars for one or more stock symbols.
+    """Get NBBO quotes for one or more stock symbols.
     
     Examples:
-        alpaca-bars AAPL
-        alpaca-bars AAPL GOOGL --timeframe 1Hour --start 2024-01-01
-        alpaca-bars AAPL --format json --output-file bars.json
-        alpaca-bars AAPL --format csv --output-file bars.csv
-        alpaca-bars AAPL --format dataframe
+        alpaca-quotes AAPL
+        alpaca-quotes AAPL GOOGL --start 2024-01-01
+        alpaca-quotes AAPL --format json --output-file quotes.json
+        alpaca-quotes AAPL --format csv --output-file quotes.csv
+        alpaca-quotes AAPL --format dataframe
     """
     try:
         # Import here to allow for proper mocking in tests
-        from src.alpaca_data import AlpacaClient
-        from src.alpaca_data.formatters import format_output
+        from alpaca_data import AlpacaClient
+        from alpaca_data.formatters import format_output
         
         # Initialize client
         client = AlpacaClient()
         
         if verbose:
-            typer.echo(f"Getting bars for symbols: {symbols}")
-            typer.echo(f"Timeframe: {timeframe}")
+            typer.echo(f"Getting quotes for symbols: {symbols}")
             typer.echo(f"Format: {format}")
+            typer.echo(f"Feed: {feed}")
             
             if start:
                 typer.echo(f"Start: {start}")
             if end:
                 typer.echo(f"End: {end}")
         
-        # Get bars from API
-        result = client.get_bars(
+        # Get quotes from API
+        result = client.get_quotes(
             symbols=symbols,
-            timeframe=timeframe,
             start=start,
             end=end,
             limit=limit,
-            adjustment=adjustment,
+            feed=feed,
             sort=sort,
             output_format=format.lower()
         )
@@ -65,7 +62,7 @@ def bars(
         # Handle different output formats
         if format.lower() == "dict":
             # Print dictionary output in a readable format
-            print_bars_dict(result, verbose)
+            print_quotes_dict(result, verbose)
         elif format.lower() == "json":
             # JSON is already formatted as string
             typer.echo(result)
@@ -102,28 +99,28 @@ def bars(
         raise typer.Exit(1)
 
 
-def print_bars_dict(result: dict, verbose: bool = False):
-    """Print bars dictionary in a readable format."""
+def print_quotes_dict(result: dict, verbose: bool = False):
+    """Print quotes dictionary in a readable format."""
     if not verbose:
         # Simple summary
-        typer.echo(f"📊 Got {result.get('count', 0)} bars for {result.get('symbol', 'unknown')}")
-        typer.echo(f"Timeframe: {result.get('timeframe', 'unknown')}")
+        typer.echo(f"📊 Got {result.get('count', 0)} quotes for {result.get('symbol', 'unknown')}")
+        typer.echo(f"Feed: {result.get('feed', 'unknown')}")
         
         if result.get('has_next_page'):
             typer.echo(f"⚠️  More data available (pagination required)")
             
-        # Show first few bars if available
-        bars = result.get('bars', [])
-        if bars and len(bars) > 0:
-            typer.echo(f"\nLatest bars:")
-            for i, bar in enumerate(bars[-3:] if len(bars) >= 3 else bars):
-                # Handle both Bar objects and dictionaries
-                if hasattr(bar, 'symbol'):
-                    # Bar object
-                    typer.echo(f"  {i+1}. {bar.symbol} | {bar.timestamp} | O:{bar.open} H:{bar.high} L:{bar.low} C:{bar.close} V:{bar.volume}")
+        # Show first few quotes if available
+        quotes = result.get('quotes', [])
+        if quotes and len(quotes) > 0:
+            typer.echo(f"\nLatest quotes:")
+            for i, quote in enumerate(quotes[-3:] if len(quotes) >= 3 else quotes):
+                # Handle both Quote objects and dictionaries
+                if hasattr(quote, 'symbol'):
+                    # Quote object
+                    typer.echo(f"  {i+1}. {quote.symbol} | {quote.timestamp} | Bid:{quote.bid_price}@{quote.bid_size} Ask:{quote.ask_price}@{quote.ask_size}")
                 else:
                     # Dictionary format
-                    typer.echo(f"  {i+1}. {bar.get('symbol', 'unknown')} | {bar.get('timestamp', 'unknown')} | O:{bar.get('open', 'N/A')} H:{bar.get('high', 'N/A')} L:{bar.get('low', 'N/A')} C:{bar.get('close', 'N/A')} V:{bar.get('volume', 'N/A')}")
+                    typer.echo(f"  {i+1}. {quote.get('symbol', 'unknown')} | {quote.get('timestamp', 'unknown')} | Bid:{quote.get('bid_price', 'N/A')}@{quote.get('bid_size', 'N/A')} Ask:{quote.get('ask_price', 'N/A')}@{quote.get('ask_size', 'N/A')}")
         
     else:
         # Verbose output - show all data
@@ -131,5 +128,6 @@ def print_bars_dict(result: dict, verbose: bool = False):
         typer.echo(json.dumps(result, indent=2, default=str))
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for CLI commands."""
     app()

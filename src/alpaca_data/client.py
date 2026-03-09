@@ -66,8 +66,50 @@ class AlpacaClient:
                 "or set ALPACA_API_KEY and ALPACA_API_SECRET environment variables."
             )
 
-        # Ensure base_url ends without trailing slash for proper URL joining
-        self.base_url = self.base_url.rstrip('/')
+        # Store original base_url for debugging/validation
+        self._original_base_url = base_url or os.getenv(
+            "ALPACA_BASE_URL", "https://paper-api.alpaca.markets"
+        )
+        
+        # Clean base_url to avoid double version segments in URLs
+        self.base_url = self._clean_base_url(self._original_base_url)
+
+    def _clean_base_url(self, url: str) -> str:
+        """Clean base URL to prevent double version segments.
+        
+        If the base URL contains version segments like /v2, they are stripped
+        to avoid conflicts with API endpoints that also include version segments.
+        
+        Args:
+            url: The base URL to clean
+            
+        Returns:
+            Cleaned URL without version segments
+        """
+        import re
+        
+        # Remove trailing slash
+        cleaned_url = url.rstrip('/')
+        
+        # Remove common API version segments
+        version_pattern = r'/v2(\.\d+)?$'
+        cleaned_url = re.sub(version_pattern, '', cleaned_url)
+        
+        # Remove trailing slash again in case version was the last segment
+        return cleaned_url.rstrip('/')
+        
+        # Detect and handle version conflicts
+        # If base_url ends with version segment (like /v2, /v1beta1), strip it
+        # to avoid duplication when endpoints already contain the version
+        import re
+        version_pattern = r'/(v[\d]+(?:beta\d+)?)$'
+        version_match = re.search(version_pattern, self.base_url)
+        if version_match:
+            self._base_version = version_match.group(1)  # e.g., "v2" or "v1beta1"
+            # Remove version from base_url to avoid duplication
+            self.base_url = self.base_url[:-len(f'/{self._base_version}')]
+        else:
+            self._base_version = None
 
     def _get_headers(self) -> Dict[str, str]:
         """Generate authentication headers for API requests."""
@@ -98,6 +140,11 @@ class AlpacaClient:
             requests.HTTPError: For HTTP error status codes
             requests.ConnectionError: For network-related errors
         """
+        # Handle URL construction intelligently to avoid double version segments
+        # If base_url contains version segment and endpoint also has version, 
+        # remove version from base_url to avoid duplication like "/v2/v2/"
+        
+        # Use the cleaned base_url (without version) for URL joining
         url = urljoin(self.base_url, endpoint)
         headers = self._get_headers()
 

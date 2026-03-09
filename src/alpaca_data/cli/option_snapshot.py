@@ -272,6 +272,11 @@ def main(
         raise typer.Exit(1)
 
 
+def main():
+    """Main entry point for CLI commands."""
+    app()
+
+
 if __name__ == "__main__":
     import os
     # Check for API credentials

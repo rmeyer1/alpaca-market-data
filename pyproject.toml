@@ -52,12 +52,15 @@ Repository = "https://github.com/alpaca/alpaca-market-data-sdk.git"
 Issues = "https://github.com/alpaca/alpaca-market-data-sdk/issues"
 
 [project.scripts]
-alpaca-bars = "scripts.get_bars:main"
-alpaca-quotes = "scripts.get_quotes:main"
-alpaca-news = "scripts.get_news:main"
-alpaca-snapshot = "scripts.get_snapshot:main"
-alpaca-trades = "scripts.get_trades:main"
-alpaca-crypto = "scripts.crypto_cli:main"
+alpaca-bars = "alpaca_data.cli.bars:main"
+alpaca-quotes = "alpaca_data.cli.quotes:main"
+alpaca-news = "alpaca_data.cli.news:main"
+alpaca-snapshot = "alpaca_data.cli.snapshot:main"
+alpaca-trades = "alpaca_data.cli.trades:main"
+alpaca-crypto = "alpaca_data.cli.crypto:main"
+alpaca-option-quotes = "alpaca_data.cli.option_quotes:main"
+alpaca-option-trades = "alpaca_data.cli.option_trades:main"
+alpaca-option-snapshot = "alpaca_data.cli.option_snapshot:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alpaca_data"]
