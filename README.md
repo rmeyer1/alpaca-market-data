@@ -9,7 +9,8 @@ A comprehensive Python SDK for accessing Alpaca's Market Data API with both prog
 ## ✨ Features
 
 - 📊 **Historical & Real-time Data**: OHLCV bars, quotes, trades, news, and market snapshots
-- 💰 **Multi-Asset Support**: Stocks, ETFs, and cryptocurrencies
+- 📈 **Options Data**: Complete options support with quotes, trades, snapshots, and Greeks
+- 💰 **Multi-Asset Support**: Stocks, ETFs, cryptocurrencies, and options
 - 🛠️ **Multiple Output Formats**: JSON, CSV, and pandas DataFrames
 - ⚡ **CLI Tools**: Quick command-line access for all endpoints
 - 🔒 **Rate Limiting**: Built-in rate limiting and retry logic
@@ -170,6 +171,39 @@ crypto_snapshots = client.get_crypto_snapshot(
 
 </details>
 
+<details>
+<summary><strong>📈 Options Data with Greeks</strong></summary>
+
+```python
+# Get option quotes with Greeks calculations
+option_quotes = client.get_option_quotes(
+    symbols=["AAPL230120C00150000", "AAPL230120P00150000"],
+    limit=50
+)
+
+for quote in option_quotes['quotes']:
+    option_type = "CALL" if "C" in quote.symbol else "PUT"
+    print(f"{quote.symbol} ({option_type}):")
+    print(f"  Bid/Ask: ${quote.bid_price:.2f} / ${quote.ask_price:.2f}")
+    if quote.greeks:
+        print(f"  Greeks: Δ={quote.greeks.delta:.3f}, Γ={quote.greeks.gamma:.4f}")
+    if quote.iv:
+        print(f"  Implied Vol: {quote.iv:.2%}")
+
+# Get option snapshots with comprehensive data
+option_snapshots = client.get_option_snapshot(
+    symbols=["AAPL230120C00150000", "AAPL230120P00150000"]
+)
+
+for snapshot in option_snapshots['snapshots']:
+    if snapshot.greeks:
+        print(f"{snapshot.symbol} Greeks: Δ={snapshot.greeks.delta:.3f}, Γ={snapshot.greeks.gamma:.4f}")
+    if snapshot.iv:
+        print(f"  Implied Volatility: {snapshot.iv:.2%}")
+    if snapshot.open_interest:
+        print(f"  Open Interest: {snapshot.open_interest}")
+```
+
 ### CLI Examples
 
 <details>
@@ -194,6 +228,11 @@ alpaca-crypto bars BTC/USD ETH/USD --timeframe 1Hour --format dataframe
 # Multiple output formats
 alpaca-bars AAPL --format csv --output-file aapl_daily.csv
 alpaca-bars AAPL --format dataframe --output-file aapl_analysis.xlsx
+
+# Options data
+alpaca-option-snapshot AAPL230120C00150000 AAPL230120P00150000
+alpaca-option-quotes AAPL230120C00150000 --format table --limit 50
+alpaca-option-trades AAPL230120C00150000 --format json
 ```
 
 </details>
@@ -236,6 +275,9 @@ client = AlpacaClient(
 | `get_crypto_bars()` | Crypto bars | `symbols`, `timeframe`, `exchange` |
 | `get_crypto_quotes()` | Crypto quotes | `symbols`, `exchange` |
 | `get_crypto_snapshot()` | Crypto snapshots | `symbols`, `exchange` |
+| `get_option_quotes()` | Options quotes with Greeks | `symbols`, `start`, `end`, `limit` |
+| `get_option_trades()` | Options trades with Greeks | `symbols`, `start`, `end`, `limit` |
+| `get_option_snapshot()` | Options snapshots with Greeks | `symbols` |
 
 ### Output Formats
 

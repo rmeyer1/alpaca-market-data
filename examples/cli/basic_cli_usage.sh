@@ -95,7 +95,23 @@ echo "# Crypto snapshots"
 echo "alpaca-crypto snapshot BTC/USD --format json"
 echo
 
-# Example 9: Help and documentation
+# Example 9: Options Data
+echo "9. Options Data"
+echo "---------------"
+echo "# Get option snapshots with Greeks"
+echo "alpaca-option-snapshot AAPL230120C00150000 AAPL230120P00150000"
+echo
+echo "# Get option quotes with implied volatility"
+echo "alpaca-option-quotes AAPL230120C00150000 --limit 10"
+echo
+echo "# Get option trades with Greeks data"
+echo "alpaca-option-trades AAPL230120C00150000 --format json"
+echo
+echo "# Multiple option symbols"
+echo "alpaca-option-snapshot AAPL230120C00145000 AAPL230120C00150000 AAPL230120C00155000"
+echo
+
+# Example 10: Help and documentation
 echo "9. Getting Help"
 echo "---------------"
 echo "# General help"
