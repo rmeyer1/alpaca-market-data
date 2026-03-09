@@ -1,6 +1,0 @@
-#!/workspace/alpaca-market-data/venv-setup/bin/python
-import sys
-from scripts.crypto_cli import main
-if __name__ == '__main__':
-    sys.argv[0] = sys.argv[0].removesuffix('.exe')
-    sys.exit(main())
