@@ -61,6 +61,7 @@ alpaca-crypto = "alpaca_data.cli.crypto:main"
 alpaca-option-quotes = "alpaca_data.cli.option_quotes:main"
 alpaca-option-trades = "alpaca_data.cli.option_trades:main"
 alpaca-option-snapshot = "alpaca_data.cli.option_snapshot:main"
+alpaca-option-chain = "alpaca_data.cli.option_chain:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/alpaca_data"]

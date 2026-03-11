@@ -1431,7 +1431,7 @@ class AlpacaClient:
     def get_option_chain(
         self,
         underlying_symbol: str,
-        feed: str = "iex",
+        feed: str = "indicative",
         output_format: str = "dict",
     ) -> Union[Dict[str, Any], str]:
         """Get complete options chain for an underlying symbol.
