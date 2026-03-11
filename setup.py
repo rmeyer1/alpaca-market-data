@@ -37,12 +37,12 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "alpaca-get-bars=alpaca_data.cli.get_bars:main",
-            "alpaca-get-quotes=alpaca_data.cli.get_quotes:main",
-            "alpaca-get-news=alpaca_data.cli.get_news:main",
-            "alpaca-get-snapshot=alpaca_data.cli.get_snapshot:main",
-            "alpaca-get-trades=alpaca_data.cli.get_trades:main",
-            "alpaca-get-crypto=alpaca_data.cli.get_crypto:main",
+            "alpaca-bars=alpaca_data.cli.bars:main",
+            "alpaca-quotes=alpaca_data.cli.quotes:main",
+            "alpaca-news=alpaca_data.cli.news:main",
+            "alpaca-snapshot=alpaca_data.cli.snapshot:main",
+            "alpaca-trades=alpaca_data.cli.trades:main",
+            "alpaca-crypto=alpaca_data.cli.crypto:main",
             "alpaca-option-quotes=alpaca_data.cli.option_quotes:main",
             "alpaca-option-snapshot=alpaca_data.cli.option_snapshot:main",
             "alpaca-option-trades=alpaca_data.cli.option_trades:main",

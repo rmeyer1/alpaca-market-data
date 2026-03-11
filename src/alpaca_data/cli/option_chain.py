@@ -297,7 +297,7 @@ def format_output(data, output_format: str = "table", verbose: bool = False):
 
 
 @app.command()
-def get_chain(
+def main(
     underlying_symbol: str = typer.Argument(..., help="Underlying stock/ETF symbol (e.g., AAPL, TSLA, SPY)"),
     feed: str = typer.Option("iex", "--feed", help="Data feed: iex (free) or sip (premium)"),
     format: str = typer.Option("table", "--format", help="Output format: table, json, csv"),
