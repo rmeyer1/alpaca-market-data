@@ -439,19 +439,15 @@ class AlpacaClient:
         quotes = []
         quotes_data = data.get("quotes", [])
 
-        if isinstance(symbols, str):
-            # Single symbol response
+        if isinstance(quotes_data, dict):
+            # Multi-symbol response - quotes_data is a dict like {"AAPL": [...], "GOOGL": [...]}
+            for symbol, symbol_quotes in quotes_data.items():
+                for quote_data in symbol_quotes:
+                    quotes.append(Quote.from_dict(symbol, quote_data))
+        else:
+            # Single symbol response - quotes_data is a list like [...]
             for quote_data in quotes_data:
                 quotes.append(Quote.from_dict(symbols, quote_data))
-        else:
-            # Multi-symbol response - each quote includes symbol field
-            for quote_data in quotes_data:
-                symbol = quote_data.get("S", quote_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Quote.from_dict
-                quote_data_copy = quote_data.copy()
-                quote_data_copy.pop("S", None)
-                quote_data_copy.pop("symbol", None)
-                quotes.append(Quote.from_dict(symbol, quote_data_copy))
 
         # Build response with metadata
         result = {
@@ -623,19 +619,15 @@ class AlpacaClient:
         trades = []
         trades_data = data.get("trades", [])
 
-        if isinstance(symbols, str):
-            # Single symbol response
+        if isinstance(trades_data, dict):
+            # Multi-symbol response - trades_data is a dict like {"AAPL": [...], "GOOGL": [...]}
+            for symbol, symbol_trades in trades_data.items():
+                for trade_data in symbol_trades:
+                    trades.append(Trade.from_dict(symbol, trade_data))
+        else:
+            # Single symbol response - trades_data is a list like [...]
             for trade_data in trades_data:
                 trades.append(Trade.from_dict(symbols, trade_data))
-        else:
-            # Multi-symbol response - each trade includes symbol field
-            for trade_data in trades_data:
-                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Trade.from_dict
-                trade_data_copy = trade_data.copy()
-                trade_data_copy.pop("S", None)
-                trade_data_copy.pop("symbol", None)
-                trades.append(Trade.from_dict(symbol, trade_data_copy))
 
         # Build response with metadata
         result = {
@@ -943,19 +935,15 @@ class AlpacaClient:
         quotes = []
         quotes_data = data.get("quotes", [])
 
-        if isinstance(symbol_or_symbols, str):
-            # Single symbol response
+        if isinstance(quotes_data, dict):
+            # Multi-symbol response - quotes_data is a dict like {"BTC/USD": [...], "ETH/USD": [...]}
+            for symbol, symbol_quotes in quotes_data.items():
+                for quote_data in symbol_quotes:
+                    quotes.append(Quote.from_dict(symbol, quote_data))
+        else:
+            # Single symbol response - quotes_data is a list like [...]
             for quote_data in quotes_data:
                 quotes.append(Quote.from_dict(symbol_or_symbols, quote_data))
-        else:
-            # Multi-symbol response - each quote includes symbol field
-            for quote_data in quotes_data:
-                symbol = quote_data.get("S", quote_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Quote.from_dict
-                quote_data_copy = quote_data.copy()
-                quote_data_copy.pop("S", None)
-                quote_data_copy.pop("symbol", None)
-                quotes.append(Quote.from_dict(symbol, quote_data_copy))
 
         # Build response with metadata
         result = {
@@ -1054,19 +1042,15 @@ class AlpacaClient:
         trades = []
         trades_data = data.get("trades", [])
 
-        if isinstance(symbol_or_symbols, str):
-            # Single symbol response
+        if isinstance(trades_data, dict):
+            # Multi-symbol response - trades_data is a dict like {"BTC/USD": [...], "ETH/USD": [...]}
+            for symbol, symbol_trades in trades_data.items():
+                for trade_data in symbol_trades:
+                    trades.append(Trade.from_dict(symbol, trade_data))
+        else:
+            # Single symbol response - trades_data is a list like [...]
             for trade_data in trades_data:
                 trades.append(Trade.from_dict(symbol_or_symbols, trade_data))
-        else:
-            # Multi-symbol response - each trade includes symbol field
-            for trade_data in trades_data:
-                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Trade.from_dict
-                trade_data_copy = trade_data.copy()
-                trade_data_copy.pop("S", None)
-                trade_data_copy.pop("symbol", None)
-                trades.append(Trade.from_dict(symbol, trade_data_copy))
 
         # Build response with metadata
         result = {
@@ -1238,19 +1222,15 @@ class AlpacaClient:
         quotes = []
         quotes_data = data.get("quotes", [])
 
-        if isinstance(symbols, str):
-            # Single symbol response
+        if isinstance(quotes_data, dict):
+            # Multi-symbol response - quotes_data is a dict like {"AAPL": [...], "GOOGL": [...]}
+            for symbol, symbol_quotes in quotes_data.items():
+                for quote_data in symbol_quotes:
+                    quotes.append(OptionQuote.from_dict(symbol, quote_data))
+        else:
+            # Single symbol response - quotes_data is a list like [...]
             for quote_data in quotes_data:
                 quotes.append(OptionQuote.from_dict(symbols, quote_data))
-        else:
-            # Multi-symbol response - each quote includes symbol field
-            for quote_data in quotes_data:
-                symbol = quote_data.get("S", quote_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for OptionQuote.from_dict
-                quote_data_copy = quote_data.copy()
-                quote_data_copy.pop("S", None)
-                quote_data_copy.pop("symbol", None)
-                quotes.append(OptionQuote.from_dict(symbol, quote_data_copy))
 
         # Build response with metadata
         result = {
@@ -1338,19 +1318,15 @@ class AlpacaClient:
         trades = []
         trades_data = data.get("trades", [])
 
-        if isinstance(symbols, str):
-            # Single symbol response
+        if isinstance(trades_data, dict):
+            # Multi-symbol response - trades_data is a dict like {"AAPL": [...], "GOOGL": [...]}
+            for symbol, symbol_trades in trades_data.items():
+                for trade_data in symbol_trades:
+                    trades.append(OptionTrade.from_dict(symbol, trade_data))
+        else:
+            # Single symbol response - trades_data is a list like [...]
             for trade_data in trades_data:
                 trades.append(OptionTrade.from_dict(symbols, trade_data))
-        else:
-            # Multi-symbol response - each trade includes symbol field
-            for trade_data in trades_data:
-                symbol = trade_data.get("S", trade_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for OptionTrade.from_dict
-                trade_data_copy = trade_data.copy()
-                trade_data_copy.pop("S", None)
-                trade_data_copy.pop("symbol", None)
-                trades.append(OptionTrade.from_dict(symbol, trade_data_copy))
 
         # Build response with metadata
         result = {
