@@ -799,16 +799,23 @@ class AlpacaClient:
         """
         from .models import Bar
 
-        # Determine API endpoint based on single or multiple symbols
+        # Use v1beta3 endpoints (always use symbols parameter)
+        if start or end:
+            # Historical bars
+            endpoint = "/v1beta3/crypto/us/bars"
+        else:
+            # Latest bars
+            endpoint = "/v1beta3/crypto/us/latest/bars"
+        
+        # Use symbols parameter for all v1beta3 crypto endpoints
         if isinstance(symbol_or_symbols, str):
-            endpoint = f"/v1beta1/crypto/bars/{symbol_or_symbols}"
             params = {
+                "symbols": symbol_or_symbols,
                 "timeframe": timeframe,
                 "limit": limit,
                 "sort": sort,
             }
         else:
-            endpoint = "/v1beta1/crypto/bars"
             params = {
                 "symbols": ",".join(symbol_or_symbols),
                 "timeframe": timeframe,
@@ -912,15 +919,22 @@ class AlpacaClient:
         """
         from .models import Quote
 
-        # Determine API endpoint based on single or multiple symbols
+        # Use v1beta3 endpoints (always use symbols parameter)
+        if start or end:
+            # Historical quotes
+            endpoint = "/v1beta3/crypto/us/quotes"
+        else:
+            # Latest quotes
+            endpoint = "/v1beta3/crypto/us/latest/quotes"
+        
+        # Use symbols parameter for all v1beta3 crypto endpoints
         if isinstance(symbol_or_symbols, str):
-            endpoint = f"/v1beta1/crypto/quotes/{symbol_or_symbols}"
             params = {
+                "symbols": symbol_or_symbols,
                 "limit": limit,
                 "sort": sort,
             }
         else:
-            endpoint = "/v1beta1/crypto/quotes"
             params = {
                 "symbols": ",".join(symbol_or_symbols),
                 "limit": limit,
@@ -1019,15 +1033,22 @@ class AlpacaClient:
         """
         from .models import Trade
 
-        # Determine API endpoint based on single or multiple symbols
+        # Use v1beta3 endpoints (always use symbols parameter)
+        if start or end:
+            # Historical trades
+            endpoint = "/v1beta3/crypto/us/trades"
+        else:
+            # Latest trades
+            endpoint = "/v1beta3/crypto/us/latest/trades"
+        
+        # Use symbols parameter for all v1beta3 crypto endpoints
         if isinstance(symbol_or_symbols, str):
-            endpoint = f"/v1beta1/crypto/trades/{symbol_or_symbols}"
             params = {
+                "symbols": symbol_or_symbols,
                 "limit": limit,
                 "sort": sort,
             }
         else:
-            endpoint = "/v1beta1/crypto/trades"
             params = {
                 "symbols": ",".join(symbol_or_symbols),
                 "limit": limit,
@@ -1114,12 +1135,15 @@ class AlpacaClient:
         """
         from .models import Snapshot
 
-        # Determine API endpoint based on single or multiple symbols
+        # Use v1beta3 endpoints (always use symbols parameter)
+        endpoint = "/v1beta3/crypto/us/snapshots"
+        
+        # Use symbols parameter for all v1beta3 crypto endpoints
         if isinstance(symbol_or_symbols, str):
-            endpoint = f"/v1beta1/crypto/snapshots/{symbol_or_symbols}"
-            params = {}
+            params = {
+                "symbols": symbol_or_symbols,
+            }
         else:
-            endpoint = "/v1beta1/crypto/snapshots"
             params = {
                 "symbols": ",".join(symbol_or_symbols),
             }
