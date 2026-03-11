@@ -525,14 +525,24 @@ class AlpacaClient:
             snapshots.append(Snapshot.from_dict(symbols, snapshot_data))
         else:
             # Multi-symbol response
-            snapshots_data = data.get("snapshots", [])
-            for snapshot_data in snapshots_data:
-                symbol = snapshot_data.get("S", snapshot_data.get("symbol", "UNKNOWN"))
-                # Remove symbol field from data for Snapshot.from_dict
-                snapshot_data_copy = snapshot_data.copy()
-                snapshot_data_copy.pop("S", None)
-                snapshot_data_copy.pop("symbol", None)
-                snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
+            # The Alpaca API can return either:
+            # 1. A dict keyed by symbol (current format): {"AAPL": {...}, "MSFT": {...}}
+            # 2. A dict with "snapshots" array (legacy format): {"snapshots": [{...}, {...}]}
+            
+            if isinstance(data, dict) and "snapshots" not in data:
+                # New format: dictionary keyed by symbol names
+                for symbol, snapshot_data in data.items():
+                    snapshots.append(Snapshot.from_dict(symbol, snapshot_data))
+            else:
+                # Legacy format: dictionary with "snapshots" array
+                snapshots_data = data.get("snapshots", [])
+                for snapshot_data in snapshots_data:
+                    symbol = snapshot_data.get("S", snapshot_data.get("symbol", "UNKNOWN"))
+                    # Remove symbol field from data for Snapshot.from_dict
+                    snapshot_data_copy = snapshot_data.copy()
+                    snapshot_data_copy.pop("S", None)
+                    snapshot_data_copy.pop("symbol", None)
+                    snapshots.append(Snapshot.from_dict(symbol, snapshot_data_copy))
 
         # Build response with metadata
         result = {
