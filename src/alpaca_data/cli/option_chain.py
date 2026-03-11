@@ -299,7 +299,7 @@ def format_output(data, output_format: str = "table", verbose: bool = False):
 @app.command()
 def main(
     underlying_symbol: str = typer.Argument(..., help="Underlying stock/ETF symbol (e.g., AAPL, TSLA, SPY)"),
-    feed: str = typer.Option("iex", "--feed", help="Data feed: iex (free) or sip (premium)"),
+    feed: str = typer.Option("indicative", "--feed", help="Data feed: indicative (free, limited) or opra (requires signed agreement)"),
     format: str = typer.Option("table", "--format", help="Output format: table, json, csv"),
     verbose: bool = typer.Option(False, "--verbose", help="Show detailed information for all contracts"),
 ):
