@@ -41,6 +41,12 @@ setup(
             "alpaca-get-quotes=alpaca_market_data.cli.get_quotes:main",
             "alpaca-get-news=alpaca_market_data.cli.get_news:main",
             "alpaca-get-snapshot=alpaca_market_data.cli.get_snapshot:main",
+            "alpaca-get-trades=alpaca_market_data.cli.get_trades:main",
+            "alpaca-get-crypto=alpaca_market_data.cli.get_crypto:main",
+            "alpaca-option-quotes=alpaca_market_data.cli.option_quotes:main",
+            "alpaca-option-snapshot=alpaca_market_data.cli.option_snapshot:main",
+            "alpaca-option-trades=alpaca_market_data.cli.option_trades:main",
+            "alpaca-option-chain=alpaca_market_data.cli.option_chain:main",
         ],
     },
 )

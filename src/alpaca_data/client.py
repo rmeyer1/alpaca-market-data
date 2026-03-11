@@ -1428,6 +1428,88 @@ class AlpacaClient:
 
         return self._apply_formatting(result, output_format)
 
+    def get_option_chain(
+        self,
+        underlying_symbol: str,
+        feed: str = "iex",
+        output_format: str = "dict",
+    ) -> Union[Dict[str, Any], str]:
+        """Get complete options chain for an underlying symbol.
+
+        This endpoint returns all available option contracts (calls and puts) for a given underlying symbol,
+        including latest trade, latest quote, and greeks for each contract.
+
+        Args:
+            underlying_symbol: The underlying stock/ETF symbol (e.g., "AAPL", "TSLA")
+            feed: Data feed ('iex' for free tier, 'sip' for premium)
+
+        Returns:
+            Dictionary containing:
+                - option_chain: OptionChain object with all contracts for the underlying
+                - underlying_symbol: The underlying symbol requested
+                - feed: The data feed used
+                - contract_count: Number of option contracts returned
+                - calls_count: Number of call contracts
+                - puts_count: Number of put contracts
+
+        Example:
+            >>> client = AlpacaClient()
+            >>> result = client.get_option_chain("AAPL")
+            >>> option_chain = result['option_chain']
+            >>> print(f"Got {result['contract_count']} contracts for {result['underlying_symbol']}")
+            >>> 
+            >>> # Get all call contracts
+            >>> calls = option_chain.get_call_contracts()
+            >>> print(f"Calls: {len(calls)}")
+            >>> 
+            >>> # Get all put contracts
+            >>> puts = option_chain.get_put_contracts()
+            >>> print(f"Puts: {len(puts)}")
+            >>> 
+            >>> # Get contracts by specific strike
+            >>> strike_contracts = option_chain.get_contracts_by_strike(200.0)
+            >>> for symbol, snapshot in strike_contracts.items():
+            ...     print(f"{symbol}: ${snapshot.latest_quote.bid_price} - ${snapshot.latest_quote.ask_price}")
+
+        Note:
+            This endpoint provides comprehensive options market data in a single request,
+            making it ideal for options trading, analysis, and strategy building.
+        """
+        from .models import OptionChain
+
+        # Build API endpoint
+        endpoint = f"/v1beta1/options/snapshots/{underlying_symbol}"
+        params = {
+            "feed": feed,
+        }
+
+        # Make the API request
+        response = self._make_request("GET", endpoint, params=params)
+        data = response.json()
+
+        # Parse options chain from response
+        # The API returns a dict keyed by contract symbols
+        option_chain = OptionChain.from_dict(underlying_symbol, data)
+        
+        # Calculate statistics
+        calls_count = len(option_chain.get_call_contracts())
+        puts_count = len(option_chain.get_put_contracts())
+        contract_count = len(option_chain.contracts)
+
+        # Build response with metadata
+        result = {
+            "option_chain": option_chain,
+            "underlying_symbol": underlying_symbol,
+            "feed": feed,
+            "contract_count": contract_count,
+            "calls_count": calls_count,
+            "puts_count": puts_count,
+            "timestamp": option_chain.timestamp.isoformat() if option_chain.timestamp else None,
+            "underlying_price": option_chain.underlying_price,
+        }
+
+        return self._apply_formatting(result, output_format)
+
     def _apply_formatting(
         self,
         data: Dict[str, Any],

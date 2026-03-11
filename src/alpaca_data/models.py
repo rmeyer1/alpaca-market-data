@@ -958,3 +958,196 @@ class OptionSnapshot:
             "daily_bar": self.daily_bar.to_dict() if self.daily_bar else None,
             "underlying_price": self.underlying_price,
         }
+
+
+@dataclass
+class OptionChain:
+    """Options chain for an underlying symbol containing all option contracts.
+
+    Attributes:
+        underlying_symbol: The underlying stock/ETF symbol (e.g., "AAPL", "TSLA").
+        contracts: Dictionary mapping option contract symbols to OptionSnapshot objects.
+        timestamp: Timestamp of the options chain data (optional).
+        underlying_price: Current underlying symbol price (optional).
+        feed: Data feed used ('iex' for free tier, 'sip' for premium) (optional).
+    """
+
+    underlying_symbol: str
+    contracts: Dict[str, OptionSnapshot]
+    timestamp: Optional[datetime] = None
+    underlying_price: Optional[float] = None
+    feed: Optional[str] = None
+
+    def __post_init__(self):
+        """Validate OptionChain data after initialization."""
+        # Validate required fields
+        if not isinstance(self.underlying_symbol, str) or not self.underlying_symbol.strip():
+            raise ValueError("Underlying symbol must be a non-empty string")
+        
+        if not isinstance(self.contracts, dict):
+            raise ValueError("Contracts must be a dictionary")
+        
+        if not self.contracts:
+            raise ValueError("At least one option contract must be provided")
+        
+        # Validate contract symbols and snapshot objects
+        for contract_symbol, snapshot in self.contracts.items():
+            if not isinstance(contract_symbol, str) or not contract_symbol.strip():
+                raise ValueError("Contract symbol must be a non-empty string")
+            
+            if not isinstance(snapshot, OptionSnapshot):
+                raise ValueError(f"Contract {contract_symbol} must contain an OptionSnapshot object")
+
+    @classmethod
+    def from_dict(cls, underlying_symbol: str, data: Dict[str, Any]) -> "OptionChain":
+        """Create OptionChain from Alpaca API response dictionary.
+        
+        Args:
+            underlying_symbol: The underlying symbol (e.g., "AAPL")
+            data: API response dictionary where keys are option contract symbols
+            
+        Returns:
+            OptionChain object with all option contracts for the underlying symbol
+        """
+        if not isinstance(data, dict):
+            raise ValueError("Data must be a dictionary")
+        
+        # Parse contracts
+        contracts = {}
+        for contract_symbol, contract_data in data.items():
+            if isinstance(contract_data, dict):
+                contracts[contract_symbol] = OptionSnapshot.from_dict(contract_symbol, contract_data)
+            else:
+                # Skip invalid contract data
+                continue
+        
+        if not contracts:
+            raise ValueError("No valid option contracts found in data")
+        
+        # Extract metadata if available
+        timestamp = None
+        underlying_price = None
+        feed = None
+        
+        # Some responses might include metadata outside the contracts
+        if "timestamp" in data and isinstance(data["timestamp"], str):
+            try:
+                timestamp = datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+        
+        if "underlying_price" in data:
+            try:
+                underlying_price = float(data["underlying_price"])
+            except (ValueError, TypeError):
+                pass
+        
+        if "feed" in data:
+            feed = str(data["feed"])
+        
+        try:
+            return cls(
+                underlying_symbol=underlying_symbol,
+                contracts=contracts,
+                timestamp=timestamp,
+                underlying_price=underlying_price,
+                feed=feed,
+            )
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid OptionChain data format: {e}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert OptionChain to dictionary format."""
+        return {
+            "underlying_symbol": self.underlying_symbol,
+            "contracts": {
+                symbol: snapshot.to_dict() 
+                for symbol, snapshot in self.contracts.items()
+            },
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "underlying_price": self.underlying_price,
+            "feed": self.feed,
+        }
+
+    def get_contracts_by_strike(self, strike: float) -> Dict[str, OptionSnapshot]:
+        """Get all contracts with a specific strike price.
+        
+        Args:
+            strike: Strike price to filter contracts
+            
+        Returns:
+            Dictionary of contract symbols to OptionSnapshot objects with the specified strike
+        """
+        result = {}
+        for symbol, snapshot in self.contracts.items():
+            # Parse strike from symbol (e.g., "AAPL240119C200" -> 200)
+            try:
+                # Standard format: UNDERLYING + DATE + TYPE + STRIKE
+                # AAPL240119C200 -> C200 (call, $200 strike)
+                if len(symbol) > 10:
+                    type_part = symbol[-10:-6]  # "C200" or "P200"
+                    if type_part[0] in ['C', 'P'] and type_part[1:].replace('.', '').isdigit():
+                        contract_strike = float(type_part[1:])
+                        if contract_strike == strike:
+                            result[symbol] = snapshot
+            except (ValueError, IndexError):
+                # Try alternative parsing if standard format fails
+                continue
+        
+        return result
+
+    def get_call_contracts(self) -> Dict[str, OptionSnapshot]:
+        """Get all call contracts.
+        
+        Returns:
+            Dictionary of call contract symbols to OptionSnapshot objects
+        """
+        return {
+            symbol: snapshot 
+            for symbol, snapshot in self.contracts.items()
+            if self._is_call_contract(symbol)
+        }
+
+    def get_put_contracts(self) -> Dict[str, OptionSnapshot]:
+        """Get all put contracts.
+        
+        Returns:
+            Dictionary of put contract symbols to OptionSnapshot objects
+        """
+        return {
+            symbol: snapshot 
+            for symbol, snapshot in self.contracts.items()
+            if self._is_put_contract(symbol)
+        }
+
+    def _is_call_contract(self, symbol: str) -> bool:
+        """Check if a contract symbol represents a call option.
+        
+        Args:
+            symbol: Option contract symbol
+            
+        Returns:
+            True if it's a call option, False otherwise
+        """
+        # Parse option type from symbol 
+        # Standard format: UNDERLYING(4-5) + DATE(6) + TYPE(1) + STRIKE(2-4)
+        # For "AAPL240119C200": position -4 from end is the type character 'C'
+        if len(symbol) > 3:
+            return symbol[-4] == 'C'  # 4th character from the end is the type
+        return False
+
+    def _is_put_contract(self, symbol: str) -> bool:
+        """Check if a contract symbol represents a put option.
+        
+        Args:
+            symbol: Option contract symbol
+            
+        Returns:
+            True if it's a put option, False otherwise
+        """
+        # Parse option type from symbol 
+        # Standard format: UNDERLYING(4-5) + DATE(6) + TYPE(1) + STRIKE(2-4)
+        # For "AAPL240119P200": position -4 from end is the type character 'P'
+        if len(symbol) > 3:
+            return symbol[-4] == 'P'  # 4th character from the end is the type
+        return False
