@@ -1,10 +1,84 @@
 """Data models for Alpaca Market Data API responses."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Union
 from decimal import Decimal
 import re
+
+
+def parse_timestamp(timestamp_str: str) -> datetime:
+    """Parse timestamp string with high precision, truncating excess decimal places.
+    
+    Python's fromisoformat() can only handle up to 6 decimal places (microseconds),
+    but Alpaca API sometimes returns timestamps with more precision.
+    
+    Args:
+        timestamp_str: ISO format timestamp string
+        
+    Returns:
+        datetime object
+    """
+    if not timestamp_str:
+        return datetime.now()
+    
+    # Handle Z suffix by converting to +00:00
+    if timestamp_str.endswith('Z'):
+        timestamp_str = timestamp_str[:-1] + '+00:00'
+    
+    # Handle timestamps with excessive decimal precision
+    # Find the decimal part and truncate to 6 places (microseconds)
+    if '.' in timestamp_str:
+        # Split at the decimal point
+        before_decimal, after_decimal = timestamp_str.split('.', 1)
+        
+        # Extract timezone info if present
+        timezone_part = ''
+        if '+' in after_decimal or after_decimal.endswith('Z'):
+            # Find where the decimal part ends and timezone begins
+            for i, char in enumerate(after_decimal):
+                if char == '+' or char == 'Z':
+                    # Split decimal and timezone parts
+                    decimal_part_only = after_decimal[:i]
+                    timezone_part = after_decimal[i:]
+                    break
+        else:
+            decimal_part_only = after_decimal
+        
+        # Truncate decimal part to max 6 places (microseconds)
+        if len(decimal_part_only) > 6:
+            # Keep only the first 6 decimal places and round
+            decimal_part = decimal_part_only[:6]
+            # Handle the case where we need to round up (rare but possible)
+            if len(decimal_part_only) > 6 and decimal_part_only[6].isdigit() and int(decimal_part_only[6]) >= 5:
+                # Round up the microseconds
+                microseconds = int(decimal_part) + 1
+                if microseconds >= 1000000:
+                    # Carry over to seconds
+                    datetime_part = datetime.fromisoformat(before_decimal + timezone_part)
+                    datetime_part = datetime_part.replace(microsecond=0)
+                    datetime_part = datetime_part.replace(tzinfo=datetime_part.tzinfo)
+                    # Add 1 second and reset microseconds
+                    return datetime_part.replace(microsecond=0) + timedelta(seconds=1)
+                else:
+                    decimal_part = f"{microseconds:06d}"
+            else:
+                decimal_part = decimal_part_only[:6]
+            
+            timestamp_str = f"{before_decimal}.{decimal_part}{timezone_part}"
+    
+    try:
+        return datetime.fromisoformat(timestamp_str)
+    except ValueError:
+        # Fallback: try parsing with different approaches
+        try:
+            # Remove any trailing timezone info and try again
+            if '+' in timestamp_str:
+                timestamp_str = timestamp_str.split('+')[0] + '+00:00'
+            return datetime.fromisoformat(timestamp_str)
+        except ValueError:
+            # Last resort: return current time
+            return datetime.now()
 
 
 @dataclass(frozen=True)
@@ -75,7 +149,7 @@ class Bar:
         try:
             return cls(
                 symbol=symbol,
-                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+                timestamp=parse_timestamp(data["t"]),
                 open=float(data["o"]),
                 high=float(data["h"]),
                 low=float(data["l"]),
@@ -171,7 +245,7 @@ class Quote:
         try:
             return cls(
                 symbol=symbol,
-                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+                timestamp=parse_timestamp(data["t"]),
                 ask_exchange=data["ax"],
                 ask_price=float(data["ap"]),
                 ask_size=float(data["as"]),
@@ -264,7 +338,7 @@ class Trade:
         try:
             return cls(
                 symbol=symbol,
-                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
+                timestamp=parse_timestamp(data["t"]),
                 exchange=data.get("x"),  # Make exchange optional
                 price=float(data["p"]),
                 size=float(data["s"]),
@@ -435,12 +509,12 @@ class News:
             return cls(
                 id=data["id"],
                 headline=data["headline"],
-                created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")),
+                created_at=parse_timestamp(data["created_at"]),
                 symbols=data["symbols"],
                 source=data["source"],
                 summary=data.get("summary"),
                 author=data.get("author"),
-                updated_at=datetime.fromisoformat(data["updated_at"].replace("Z", "+00:00")) if data.get("updated_at") else None,
+                updated_at=parse_timestamp(data["updated_at"]) if data.get("updated_at") else None,
                 url=data.get("url"),
                 content=data.get("content"),
             )
@@ -630,7 +704,7 @@ class OptionQuote:
         try:
             return cls(
                 symbol=symbol,
-                timestamp=datetime.fromisoformat(timestamp.replace("Z", "+00:00")) if timestamp else datetime.now(),
+                timestamp=parse_timestamp(timestamp) if timestamp else datetime.now(),
                 bid_price=float(bid_price),
                 ask_price=float(ask_price),
                 bid_size=int(bid_size),
@@ -742,7 +816,7 @@ class OptionTrade:
         try:
             return cls(
                 symbol=symbol,
-                timestamp=datetime.fromisoformat(timestamp.replace("Z", "+00:00")) if timestamp else datetime.now(),
+                timestamp=parse_timestamp(timestamp) if timestamp else datetime.now(),
                 price=float(price),
                 size=int(size),
                 exchange=str(exchange),
