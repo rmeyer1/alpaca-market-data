@@ -295,7 +295,7 @@ class Trade:
     price: float
     size: float
     conditions: Optional[List[str]] = None
-    id: Optional[str] = None
+    id: Optional[Union[str, int]] = None
     tape: Optional[str] = None
 
     def __post_init__(self):
@@ -318,8 +318,8 @@ class Trade:
         if self.conditions is not None and not isinstance(self.conditions, list):
             raise ValueError("Conditions must be a list")
         
-        if self.id is not None and not isinstance(self.id, str):
-            raise ValueError("ID must be a string")
+        if self.id is not None and not isinstance(self.id, (str, int)):
+            raise ValueError("ID must be a string or integer")
         
         if self.tape is not None and not isinstance(self.tape, str):
             raise ValueError("Tape must be a string")
