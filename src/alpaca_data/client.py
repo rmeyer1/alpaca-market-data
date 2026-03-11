@@ -1488,8 +1488,9 @@ class AlpacaClient:
         data = response.json()
 
         # Parse options chain from response
-        # The API returns a dict keyed by contract symbols
-        option_chain = OptionChain.from_dict(underlying_symbol, data)
+        # The API returns a dict with snapshots key containing contract symbols
+        contracts_data = data.get('snapshots', {})
+        option_chain = OptionChain.from_dict(underlying_symbol, contracts_data)
         
         # Calculate statistics
         calls_count = len(option_chain.get_call_contracts())
